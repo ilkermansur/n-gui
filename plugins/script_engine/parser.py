@@ -226,7 +226,10 @@ def apply_yaml_input(field_spec: FieldSpec, config) -> str:
         field_spec.label_tr = label_tr
         field_spec.label_en = label_en
     if "required" in config:
-        field_spec.required = bool(config["required"])
+        # "false" gibi metinler bool() ile True olurdu; sadece gerçek bool kabul.
+        if not isinstance(config["required"], bool):
+            return "Girdi '" + field_spec.name + "' required true/false olmalı"
+        field_spec.required = config["required"]
     if "default" in config:
         field_spec.default = config["default"]
     if "options" in config:
@@ -255,12 +258,18 @@ def apply_yaml_settings(spec: ScriptSpec, data: dict) -> str:
     Dönüş: hata mesajı; sorun yoksa boş metin.
     """
     if "title" in data:
+        if isinstance(data["title"], list):
+            return "title metin veya {tr, en} olmalı"
         title_tr, title_en = read_text_pair(data["title"], spec.title_tr)
         spec.title_tr = title_tr
         spec.title_en = title_en
     if "section" in data:
+        if isinstance(data["section"], (list, dict)):
+            return "section bir metin olmalı"
         spec.suggested_section = str(data["section"] or "")
     if "group" in data:
+        if isinstance(data["group"], (list, dict)):
+            return "group bir metin olmalı"
         spec.suggested_group = str(data["group"] or "")
     if "mode" in data:
         mode = str(data["mode"])
@@ -288,8 +297,13 @@ def apply_yaml_settings(spec: ScriptSpec, data: dict) -> str:
     return ""
 
 
-def apply_yaml_inputs(spec: ScriptSpec, inputs) -> str:
-    """YAML `inputs` bölümünü imzadan gelen alanlara ada göre uygular."""
+def apply_yaml_inputs(spec: ScriptSpec, inputs, has_var_keyword: bool) -> str:
+    """YAML `inputs` bölümünü imzadan gelen alanlara ada göre uygular.
+
+    Parametreler: spec - üzerine yazılacak spec; inputs - YAML değeri;
+    has_var_keyword - run() **kwargs alıyor mu. Alıyorsa imzada olmayan
+    girdiler YAML'dan yeni alan olarak eklenir, almıyorsa hata verilir.
+    """
     if inputs is None:
         return ""
     if not isinstance(inputs, dict):
@@ -299,6 +313,15 @@ def apply_yaml_inputs(spec: ScriptSpec, inputs) -> str:
         for field_spec in spec.fields:
             if field_spec.name == str(input_name):
                 target = field_spec
+        if target is None and has_var_keyword:
+            target = FieldSpec(
+                name=str(input_name),
+                field_type="str",
+                label_tr=str(input_name),
+                label_en=str(input_name),
+                required=False,
+            )
+            spec.fields.append(target)
         if target is None:
             return "inputs içindeki '" + str(input_name) + "' run() imzasında yok"
         error = apply_yaml_input(target, config)
@@ -363,7 +386,9 @@ def parse_script_file(path: str) -> ScriptSpec:
 
     try:
         data = yaml.safe_load(yaml_text)
-    except yaml.YAMLError as error:
+    except Exception as error:
+        # safe_load sadece YAMLError değil ValueError (geçersiz tarih),
+        # RecursionError (aşırı iç içe yapı) gibi hatalar da fırlatabilir.
         spec.error = "YAML okunamadı: " + str(error)
         return spec
     if data is None:
@@ -374,6 +399,7 @@ def parse_script_file(path: str) -> ScriptSpec:
 
     error = apply_yaml_settings(spec, data)
     if error == "":
-        error = apply_yaml_inputs(spec, data.get("inputs"))
+        has_var_keyword = run_node.args.kwarg is not None
+        error = apply_yaml_inputs(spec, data.get("inputs"), has_var_keyword)
     spec.error = error
     return spec

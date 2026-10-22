@@ -144,3 +144,33 @@ def test_kwargs_ignored_and_input_not_in_signature(tmp_path):
     text = '"""x\n---\ninputs:\n  zzz: {type: str}\n---\n"""\ndef run(a: str):\n    return 1\n'
     spec = parse_script_file(write_script(tmp_path, text))
     assert "zzz" in spec.error
+
+
+def test_yaml_non_yamlerror_exceptions_set_error(tmp_path):
+    text = '"""x\n---\ntitle: 2001-13-45\n---\n"""\ndef run():\n    return 1\n'
+    spec = parse_script_file(write_script(tmp_path, text))
+    assert spec.error.startswith("YAML okunamadı")
+    deep = '"""x\n---\ntitle: ' + "[" * 5000 + '\n---\n"""\ndef run():\n    return 1\n'
+    spec = parse_script_file(write_script(tmp_path, deep, "deep.py"))
+    assert spec.error.startswith("YAML okunamadı")
+
+
+def test_kwargs_run_takes_fields_from_yaml(tmp_path):
+    text = (
+        '"""x\n---\ninputs:\n  host: {type: int, label: Sunucu, required: true, default: 5, min: 1}\n'
+        '  note: {}\n---\n"""\ndef run(**kwargs):\n    return 1\n'
+    )
+    spec = parse_script_file(write_script(tmp_path, text))
+    assert spec.error == ""
+    host, note = spec.fields
+    assert host.field_type == "int" and host.required is True
+    assert host.default == 5 and host.min_value == 1 and host.label_tr == "Sunucu"
+    assert note.field_type == "str" and note.required is False
+
+
+def test_required_must_be_bool_and_text_fields_not_list(tmp_path):
+    text = '"""x\n---\ninputs:\n  a: {required: "false"}\n---\n"""\ndef run(a):\n    return 1\n'
+    assert "required" in parse_script_file(write_script(tmp_path, text)).error
+    for key in ["title", "section", "group"]:
+        text = '"""x\n---\n' + key + ': [a, b]\n---\n"""\ndef run():\n    return 1\n'
+        assert parse_script_file(write_script(tmp_path, text)).error != ""
