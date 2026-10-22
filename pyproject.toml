@@ -8,13 +8,20 @@ version = "0.1.0"
 description = "Modüler NiceGUI kabuk uygulamasi"
 requires-python = ">=3.12"
 dependencies = [
-    "nicegui>=3.18",
-    "sqlalchemy>=2.1",
-    "pyyaml",
-    "bcrypt",
+    # Neden üst sınır: ana sürüm değişikliği (4.x) arayüz API'sini kırabilir; bilinçli yükseltilmeli.
+    "nicegui>=3.18,<4",
+    "sqlalchemy>=2.1,<3",
+    "pyyaml>=6,<7",
+    "bcrypt>=4,<6",
     "apscheduler>=3.11,<4",
-    "tomli-w",
-    "pytest",
+    "tomli-w>=1,<2",
+]
+
+[project.optional-dependencies]
+# Geliştirme ve test araçları: .venv/bin/pip install -e ".[dev]"
+dev = [
+    "pytest>=8",
+    "playwright>=1.45",
 ]
 
 [tool.setuptools.packages.find]
@@ -23,3 +30,6 @@ include = ["app*", "plugins*"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "e2e: tarayıcıyla uçtan uca testler (NGUI_E2E=1 ile çalışır)",
+]
