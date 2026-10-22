@@ -22,9 +22,9 @@ import os
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.core.db import get_session
 from app.core.plugin import NavItem
@@ -695,6 +695,20 @@ class ScriptService:
             for run in session.scalars(query):
                 runs.append(run_to_dict(run))
             return runs
+
+    def purge_runs_older_than(self, days: int) -> int:
+        """Verilen günden eski çalışma kayıtlarını siler.
+
+        Parametre: days - saklama süresi (gün); 0 ya da negatifse hiçbir şey silinmez.
+        Dönüş: silinen kayıt sayısı. Kim çağırır: plugin.py (açılışta ve günde bir).
+        """
+        if days <= 0:
+            return 0
+        limit_time = datetime.now() - timedelta(days=days)
+        with get_session() as session:
+            result = session.execute(delete(ScriptRun).where(ScriptRun.started_at < limit_time))
+            session.commit()
+            return result.rowcount or 0
 
     def last_run(self, script_id: str) -> dict | None:
         """Script'in son çalıştırmasını döndürür; hiç çalışmadıysa None."""

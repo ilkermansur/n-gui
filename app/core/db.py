@@ -7,11 +7,15 @@ fabrikası bu modülün değişkenlerinde saklanır. Eklentiler modellerini
 setup sırasında import ettiği için create_all_tables() tüm tabloları bir kerede kurar.
 """
 
+import logging
 from pathlib import Path
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, MetaData, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -69,3 +73,58 @@ def create_all_tables() -> None:
     if engine is None:
         raise RuntimeError("Veritabanı hazır değil: önce init_database() çağrılmalı.")
     Base.metadata.create_all(engine)
+    add_missing_columns(engine, Base.metadata)
+
+
+def column_default_sql(column, dialect) -> str:
+    """Sütunun sabit varsayılan değerini SQL metni olarak döndürür; yoksa boş metin.
+
+    Parametreler: column - SQLAlchemy Column; dialect - motorun SQL lehçesi.
+    Neden yalnızca sabit: datetime.now gibi fonksiyon varsayılanları SQL'e yazılamaz.
+    """
+    default = column.default
+    if default is None or not default.is_scalar:
+        return ""
+    value = default.arg
+    if isinstance(value, bool):
+        # Neden: bool, int'in alt sınıfıdır; önce kontrol edilmeli.
+        return "1" if value else "0"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        return "'" + value.replace("'", "''") + "'"
+    return ""
+
+
+def add_missing_columns(target_engine: Engine, metadata: MetaData) -> list[str]:
+    """Var olan tablolara modelde olup veritabanında olmayan sütunları ekler (basit göç).
+
+    Parametreler: target_engine - veritabanı motoru; metadata - modellerin MetaData'sı.
+    Dönüş: eklenen "tablo.sütun" adlarının listesi.
+    Neden: create_all yalnızca eksik tabloları kurar. Bir eklenti modeline yeni sütun
+    eklendiğinde eski kurulumlar elle ALTER TABLE gerektirmesin. Sütun silme, tip
+    değiştirme ve yeniden adlandırma yapılmaz; bunlar elle yapılmalıdır.
+    Yeni sütun NULL olabilir şekilde eklenir; sabit varsayılanı varsa eski satırlar onu alır.
+    """
+    added = []
+    inspector = inspect(target_engine)
+    existing_tables = inspector.get_table_names()
+    for table in metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue
+        existing_columns = []
+        for column_info in inspector.get_columns(table.name):
+            existing_columns.append(column_info["name"])
+        for column in table.columns:
+            if column.name in existing_columns:
+                continue
+            column_type = column.type.compile(dialect=target_engine.dialect)
+            statement = "ALTER TABLE " + table.name + " ADD COLUMN " + column.name + " " + column_type
+            default_sql = column_default_sql(column, target_engine.dialect)
+            if default_sql:
+                statement += " DEFAULT " + default_sql
+            with target_engine.begin() as connection:
+                connection.execute(text(statement))
+            added.append(table.name + "." + column.name)
+            logger.info("Veritabanına sütun eklendi: %s.%s", table.name, column.name)
+    return added

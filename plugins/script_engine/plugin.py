@@ -8,11 +8,20 @@ bölüm/grup bilgisi için "menu" eklentisine ihtiyaç duyar; "auth" ve "i18n"
 varsa kullanılır (yoksa yetki süzmesi/çeviri yapılmaz).
 """
 
+import logging
+
+from nicegui import app
+
 from app.core.plugin import Plugin, SettingsPanel
 from plugins.script_engine import models  # noqa: F401  (tabloların Base'e kaydolması için)
 from plugins.script_engine import script_page  # noqa: F401  (import /script/{id} sayfasını kaydeder)
 from plugins.script_engine.scripts_panel import build_scripts_settings_panel
 from plugins.script_engine.service import ScriptService
+
+logger = logging.getLogger(__name__)
+
+# Saklama süresi temizliğinin aralığı (saniye): günde bir.
+PURGE_INTERVAL_SECONDS = 24 * 60 * 60
 
 
 class ScriptEnginePlugin(Plugin):
@@ -42,3 +51,16 @@ class ScriptEnginePlugin(Plugin):
                 build_function=build_scripts_settings_panel,
             )
         )
+        # Neden açılışta ve günde bir: [audit] retention_days doluysa eski çalışma geçmişi silinsin.
+        kernel.events.subscribe("database.ready", self.on_database_ready)
+        app.timer(PURGE_INTERVAL_SECONDS, self.purge_old_runs, immediate=False)
+
+    def on_database_ready(self, data: dict) -> None:
+        """Tablolar hazır olunca ilk temizliği yapar. Parametre: data (kullanılmaz)."""
+        self.purge_old_runs()
+
+    def purge_old_runs(self) -> None:
+        """Saklama süresinden eski çalışma kayıtlarını siler ve sayıyı loglar. Dönüş: yok."""
+        removed = self.service.purge_runs_older_than(self.kernel.config.retention_days)
+        if removed > 0:
+            logger.info("Saklama süresi dolan %s script çalışma kaydı silindi", removed)

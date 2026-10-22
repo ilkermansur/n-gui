@@ -7,13 +7,27 @@ thread'den de çağrılabilir (scriptler run.io_bound ile çalışır); bu yüzd
 çağrı kendi oturumunu get_session() ile açar, hiçbir oturum paylaşılmaz.
 """
 
-from sqlalchemy import or_, select
+from datetime import datetime, timedelta
+
+from sqlalchemy import delete, or_, select
 
 from app.core.db import get_session
 from plugins.audit_log.models import AuditEntry
 
 # details alanı bu uzunluktan fazlaysa kırpılır.
 MAX_DETAILS_LENGTH = 4000
+# Log sayfasının bir aramada en fazla getirdiği kayıt sayısı (tablo sayfalı gösterir).
+SEARCH_LIMIT = 2000
+
+
+def parse_day(text: str) -> datetime | None:
+    """"YYYY-MM-DD" metnini o günün başlangıcına çevirir; boş ya da bozuksa None."""
+    if not text:
+        return None
+    try:
+        return datetime.strptime(text, "%Y-%m-%d")
+    except ValueError:
+        return None
 
 
 def entry_to_dict(entry: AuditEntry) -> dict:
@@ -65,14 +79,29 @@ class AuditService:
             session.add(entry)
             session.commit()
 
-    def search(self, status: str | None, text: str, limit: int = 500) -> list[dict]:
+    def search(
+        self,
+        status: str | None,
+        text: str,
+        limit: int = SEARCH_LIMIT,
+        date_from: str = "",
+        date_to: str = "",
+    ) -> list[dict]:
         """Kayıtları filtreleyip en yeni önce olacak şekilde döndürür.
 
         Parametreler: status - "ok"/"error" ya da None (hepsi); text - kullanıcı,
-        işlem, hedef veya detayda aranan metin (boşsa süzme yok); limit - en fazla kayıt.
+        işlem, hedef veya detayda aranan metin (boşsa süzme yok); limit - en fazla kayıt;
+        date_from / date_to - "YYYY-MM-DD", iki gün de dahil (boşsa sınır yok).
         Dönüş: sözlük listesi.
         """
         query = select(AuditEntry)
+        start = parse_day(date_from)
+        if start is not None:
+            query = query.where(AuditEntry.created_at >= start)
+        end = parse_day(date_to)
+        if end is not None:
+            # Neden ertesi gün: bitiş günü de dahil olsun (23:59 kaydı da gelsin).
+            query = query.where(AuditEntry.created_at < end + timedelta(days=1))
         if status:
             query = query.where(AuditEntry.status == status)
         if text:
@@ -93,6 +122,20 @@ class AuditService:
         for entry in entries:
             result.append(entry_to_dict(entry))
         return result
+
+    def purge_older_than(self, days: int) -> int:
+        """Verilen günden eski kayıtları siler.
+
+        Parametre: days - saklama süresi (gün); 0 ya da negatifse hiçbir şey silinmez.
+        Dönüş: silinen kayıt sayısı.
+        """
+        if days <= 0:
+            return 0
+        limit_time = datetime.now() - timedelta(days=days)
+        with get_session() as session:
+            result = session.execute(delete(AuditEntry).where(AuditEntry.created_at < limit_time))
+            session.commit()
+            return result.rowcount or 0
 
     # ---------- Olay dinleyicileri ----------
 

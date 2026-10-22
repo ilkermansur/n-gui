@@ -2,6 +2,7 @@
 
 Kim kullanır: plugin.py (bu modülü import etmesi sayfayı kaydeder).
 Nasıl bağlanır: "audit" servisinin search() sonucunu ui.table'da çizer.
+Süzgeçler: durum, metin ve tarih aralığı. Tablo 50'şer satırlık sayfalara bölünür.
 Durum hücresi rozet olarak görünür; sayfa "log.view" izni ister.
 """
 
@@ -11,11 +12,14 @@ from app.core.access import check_page_access
 from app.core.kernel import get_kernel
 from app.core.layout import create_shell_frame
 from app.core.text import t
-from app.core.theme import PAGE_TITLE_CLASSES
+from app.core.theme import LABEL_CLASSES, PAGE_TITLE_CLASSES
 from app.core.widgets import page_card
+from plugins.audit_log.service import SEARCH_LIMIT
 
 # Durum seçicisindeki "hepsi" değeri.
 STATUS_ALL = "all"
+# Tablonun bir sayfasındaki satır sayısı.
+ROWS_PER_PAGE = 50
 
 
 class LogView:
@@ -26,6 +30,9 @@ class LogView:
         self.audit = audit
         self.status_select = None
         self.search_input = None
+        self.date_from_input = None
+        self.date_to_input = None
+        self.count_label = None
         self.table = None
 
     def build(self) -> None:
@@ -40,7 +47,12 @@ class LogView:
                 status_options, value=STATUS_ALL, label=t("audit_log.col.status")
             ).classes("w-44")
             self.search_input = ui.input(label=t("audit_log.search")).classes("w-72")
+            self.search_input.on("keydown.enter", self.refresh)
+            # Neden type=date: tarayıcının kendi tarih seçicisi açılır, değer "YYYY-MM-DD" gelir.
+            self.date_from_input = ui.input(label=t("audit_log.date_from")).props("type=date stack-label")
+            self.date_to_input = ui.input(label=t("audit_log.date_to")).props("type=date stack-label")
             ui.button(t("audit_log.refresh"), icon="refresh", on_click=self.refresh)
+        self.count_label = ui.label("").classes(LABEL_CLASSES)
 
         columns = [
             {"name": "created_at", "label": t("audit_log.col.time"), "field": "created_at", "align": "left"},
@@ -51,7 +63,9 @@ class LogView:
             {"name": "duration_ms", "label": t("audit_log.col.duration"), "field": "duration_ms", "align": "right"},
             {"name": "details", "label": t("audit_log.col.details"), "field": "details", "align": "left"},
         ]
-        self.table = ui.table(columns=columns, rows=[], row_key="id").classes("w-full")
+        self.table = ui.table(
+            columns=columns, rows=[], row_key="id", pagination={"rowsPerPage": ROWS_PER_PAGE}
+        ).classes("w-full")
         # Neden slot: durum hücresi düz metin değil renkli rozet olmalı (Quasar badge).
         self.table.add_slot(
             "body-cell-status",
@@ -67,9 +81,19 @@ class LogView:
         status = self.status_select.value
         if status == STATUS_ALL:
             status = None
-        rows = self.audit.search(status, self.search_input.value or "")
+        rows = self.audit.search(
+            status,
+            self.search_input.value or "",
+            date_from=self.date_from_input.value or "",
+            date_to=self.date_to_input.value or "",
+        )
         self.table.rows = rows
         self.table.update()
+        # Neden uyarı: arama sınırına ulaşıldıysa daha eski kayıtlar vardır; süzgeç daraltılmalı.
+        if len(rows) >= SEARCH_LIMIT:
+            self.count_label.set_text(t("audit_log.limit_reached", count=len(rows)))
+        else:
+            self.count_label.set_text(t("audit_log.count", count=len(rows)))
 
 
 @ui.page("/log")

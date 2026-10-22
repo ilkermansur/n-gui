@@ -465,3 +465,19 @@ def test_uploaded_files_are_discarded_after_run(service, kernel, tmp_path):
     result = service.execute("dosya", {"belge": uploaded}, "ali")
     assert result.success is True
     assert forms.discarded == [uploaded]
+
+
+def test_purge_runs_older_than(service):
+    """Saklama süresinden eski çalışma kayıtları silinir."""
+    from datetime import datetime, timedelta
+
+    from app.core.db import get_session
+    from plugins.script_engine.models import ScriptRun
+
+    with get_session() as session:
+        session.add(ScriptRun(script_id="a", started_at=datetime.now() - timedelta(days=100)))
+        session.add(ScriptRun(script_id="a", started_at=datetime.now()))
+        session.commit()
+    assert service.purge_runs_older_than(0) == 0
+    assert service.purge_runs_older_than(90) == 1
+    assert len(service.list_runs("a")) == 1

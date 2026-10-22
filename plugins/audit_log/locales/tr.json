@@ -12,5 +12,9 @@
   "audit_log.col.target": "Hedef",
   "audit_log.col.status": "Durum",
   "audit_log.col.duration": "Süre (ms)",
-  "audit_log.col.details": "Detay"
+  "audit_log.col.details": "Detay",
+  "audit_log.date_from": "Başlangıç tarihi",
+  "audit_log.date_to": "Bitiş tarihi",
+  "audit_log.count": "{count} kayıt",
+  "audit_log.limit_reached": "İlk {count} kayıt gösteriliyor; daha eski kayıtlar için süzgeci daraltın."
 }

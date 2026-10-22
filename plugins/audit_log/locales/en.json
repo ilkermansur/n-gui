@@ -12,5 +12,9 @@
   "audit_log.col.target": "Target",
   "audit_log.col.status": "Status",
   "audit_log.col.duration": "Duration (ms)",
-  "audit_log.col.details": "Details"
+  "audit_log.col.details": "Details",
+  "audit_log.date_from": "From date",
+  "audit_log.date_to": "To date",
+  "audit_log.count": "{count} records",
+  "audit_log.limit_reached": "Showing the first {count} records; narrow the filter to see older ones."
 }

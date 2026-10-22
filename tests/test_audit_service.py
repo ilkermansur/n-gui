@@ -92,3 +92,38 @@ def test_long_details_truncated(audit):
     audit.write("ali", "script.run", "x", "error", details="a" * 5000)
     rows = audit.search(None, "")
     assert len(rows[0]["details"]) == 4000
+
+
+def test_search_by_date_range(audit):
+    """Tarih aralığı verilince yalnızca o günlerdeki kayıtlar döner."""
+    from datetime import datetime
+
+    from app.core.db import get_session
+    from plugins.audit_log.models import AuditEntry
+
+    with get_session() as session:
+        session.add(AuditEntry(username="a", action="eski", created_at=datetime(2026, 1, 10, 9, 0)))
+        session.add(AuditEntry(username="b", action="orta", created_at=datetime(2026, 1, 15, 23, 59)))
+        session.add(AuditEntry(username="c", action="yeni", created_at=datetime(2026, 1, 20, 8, 0)))
+        session.commit()
+    actions = [row["action"] for row in audit.search(None, "", date_from="2026-01-12", date_to="2026-01-15")]
+    assert actions == ["orta"]
+    actions = [row["action"] for row in audit.search(None, "", date_from="2026-01-15")]
+    assert actions == ["yeni", "orta"]
+
+
+def test_purge_older_than(audit):
+    """Saklama süresinden eski kayıtlar silinir; 0 gün hiçbir şey silmez."""
+    from datetime import datetime, timedelta
+
+    from app.core.db import get_session
+    from plugins.audit_log.models import AuditEntry
+
+    with get_session() as session:
+        session.add(AuditEntry(username="a", action="eski", created_at=datetime.now() - timedelta(days=40)))
+        session.add(AuditEntry(username="b", action="yeni", created_at=datetime.now() - timedelta(days=5)))
+        session.commit()
+    assert audit.purge_older_than(0) == 0
+    assert audit.purge_older_than(30) == 1
+    actions = [row["action"] for row in audit.search(None, "")]
+    assert actions == ["yeni"]
