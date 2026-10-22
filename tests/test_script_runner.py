@@ -5,6 +5,11 @@ Nasıl bağlanır: her test geçici klasöre küçük bir script yazar ve run_sc
 gerçek bir alt süreçte çalıştırır.
 """
 
+import os
+import time
+
+import pytest
+
 from plugins.script_engine.runner import run_script
 
 
@@ -103,3 +108,40 @@ def test_sibling_module_import_and_cwd(tmp_path):
     result = run_script(write_script(tmp_path, body), {}, 10)
     assert result.success is True
     assert result.result == [42, "veri"]
+
+
+def test_timeout_kills_grandchildren(tmp_path):
+    pid_file = tmp_path / "grandchild.pid"
+    body = (
+        "import subprocess, sys, time\n\n"
+        "def run(**inputs):\n"
+        "    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])\n"
+        "    open(%r, 'w').write(str(child.pid))\n"
+        "    time.sleep(30)\n" % str(pid_file)
+    )
+    result = run_script(write_script(tmp_path, body), {}, 1)
+    assert result.timed_out is True
+    grandchild_pid = int(pid_file.read_text())
+    # Öldürülen süreç toplanana kadar kısa bir süre beklenebilir.
+    for _ in range(20):
+        try:
+            os.kill(grandchild_pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    with pytest.raises(ProcessLookupError):
+        os.kill(grandchild_pid, 0)
+
+
+def test_nonzero_exit_without_stderr_has_fallback_message(tmp_path):
+    body = "import sys\n\ndef run(**inputs):\n    sys.exit(3)\n"
+    result = run_script(write_script(tmp_path, body), {}, 10)
+    assert result.success is False
+    assert "3 koduyla çıktı" in result.error_text
+
+
+def test_unserializable_arguments_do_not_raise(tmp_path):
+    path = write_script(tmp_path, "def run(**inputs):\n    return 1\n")
+    result = run_script(path, {"x": object()}, 10)
+    assert result.success is False
+    assert "Script başlatılamadı" in result.error_text

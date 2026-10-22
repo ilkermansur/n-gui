@@ -4,11 +4,15 @@ Kim kullanır: script motoru eklentisi (sonraki task'lar) ve testler.
 Nasıl bağlanır: run_script() argümanları geçici bir JSON dosyasına yazar,
 runner_shim.py'yi `python -I` ile başlatır ve stdout'taki son marker satırını
 sonuç olarak ayırır. Geri kalan stdout `output_text` olur. Zaman aşımında alt
-süreç öldürülür. Hiçbir durumda istisna fırlatmaz; sonuç RunResult içinde döner.
+sürecin tüm süreç grubu öldürülür. Hiçbir durumda istisna fırlatmaz; sonuç
+RunResult içinde döner. Not: süreç grubu (killpg) macOS/Linux içindir; Windows
+burada desteklenmez.
+
 """
 
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -79,64 +83,74 @@ def split_result_line(stdout_text):
     return output_text, result_json
 
 
-def run_script(file_path, arguments, timeout_seconds):
-    """Script'i izole bir alt süreçte çalıştırır.
+def kill_process_group(process):
+    """Alt süreci ve onun başlattığı tüm torun süreçleri öldürür.
+
+    Parametre: process - subprocess.Popen nesnesi (start_new_session=True ile açılmış).
+    Dönüş: yok.
+    """
+    # subprocess.run yalnızca doğrudan çocuğu öldürür; script'in başlattığı
+    # süreçler arkada çalışmaya devam ederdi. Yeni oturumda çocuğun pid'i grup
+    # kimliğidir, grubu öldürmek hepsini kapatır.
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        # Süreç tam bu sırada kendiliğinden bitmiş; yapılacak bir şey yok.
+        pass
+
+
+def run_with_arguments_file(file_path, arguments_path, timeout_seconds):
+    """Shim'i başlatır, bekler ve çıktıyı RunResult'a çevirir.
 
     Parametreler:
         file_path: çalıştırılacak .py dosyasının yolu.
-        arguments: run(**arguments) ile verilecek sözlük.
-        timeout_seconds: bu süre dolunca alt süreç öldürülür.
+        arguments_path: argümanların yazıldığı JSON dosyasının yolu.
+        timeout_seconds: bu süre dolunca süreç grubu öldürülür.
     Dönüş: RunResult.
     """
     script_folder = os.path.dirname(os.path.abspath(file_path))
+    command = [sys.executable, "-I", SHIM_PATH, file_path, arguments_path]
+    child_env = dict(os.environ)
+    child_env["PYTHONIOENCODING"] = "utf-8"
 
-    # Argümanları komut satırı yerine dosyayla veriyoruz: uzunluk sınırı ve
-    # kaçış (escape) sorunları olmasın, Türkçe karakterler bozulmasın.
-    arguments_file = tempfile.NamedTemporaryFile(
-        delete=False, suffix=".json", mode="w", encoding="utf-8"
+    started_at = time.monotonic()
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=script_folder,
+        env=child_env,
+        start_new_session=True,
     )
     try:
-        json.dump(arguments, arguments_file, ensure_ascii=False)
-        arguments_file.close()
-
-        command = [sys.executable, "-I", SHIM_PATH, file_path, arguments_file.name]
-        child_env = dict(os.environ)
-        child_env["PYTHONIOENCODING"] = "utf-8"
-
-        started_at = time.monotonic()
-        try:
-            completed = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout_seconds,
-                cwd=script_folder,
-                env=child_env,
-            )
-        except subprocess.TimeoutExpired as timeout_error:
-            duration_ms = int((time.monotonic() - started_at) * 1000)
-            partial_output = decode_partial_output(timeout_error.stdout)
-            output_text, _ = split_result_line(partial_output)
-            return RunResult(
-                success=False,
-                result=None,
-                output_text=output_text[:MAX_TEXT_LENGTH],
-                error_text="Zaman aşımı: %s saniye içinde bitmedi" % timeout_seconds,
-                duration_ms=duration_ms,
-                timed_out=True,
-            )
+        stdout_text, stderr_text = process.communicate(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        kill_process_group(process)
+        # Öldürdükten sonra kalan çıktıyı boşaltıp süreci toplarız.
+        stdout_text, stderr_text = process.communicate()
         duration_ms = int((time.monotonic() - started_at) * 1000)
-    finally:
-        # Geçici dosya her durumda silinir.
-        os.unlink(arguments_file.name)
+        output_text, _ = split_result_line(stdout_text or "")
+        return RunResult(
+            success=False,
+            result=None,
+            output_text=output_text[:MAX_TEXT_LENGTH],
+            error_text="Zaman aşımı: %s saniye içinde bitmedi" % timeout_seconds,
+            duration_ms=duration_ms,
+            timed_out=True,
+        )
+    duration_ms = int((time.monotonic() - started_at) * 1000)
 
-    output_text, result_json = split_result_line(completed.stdout)
+    output_text, result_json = split_result_line(stdout_text)
     output_text = output_text[:MAX_TEXT_LENGTH]
-    stderr_text = completed.stderr[:MAX_TEXT_LENGTH]
+    stderr_text = stderr_text[:MAX_TEXT_LENGTH]
 
-    if completed.returncode != 0:
+    if process.returncode != 0:
+        if not stderr_text.strip():
+            # sys.exit(3) veya sinyalle ölüm gibi durumlarda stderr boş kalır.
+            stderr_text = "Script %s koduyla çıktı" % process.returncode
         return RunResult(False, None, output_text, stderr_text, duration_ms)
 
     if result_json is None:
@@ -149,3 +163,32 @@ def run_script(file_path, arguments, timeout_seconds):
         return RunResult(False, None, output_text, "Sonuç JSON olarak okunamadı", duration_ms)
 
     return RunResult(True, result, output_text, stderr_text, duration_ms)
+
+
+def run_script(file_path, arguments, timeout_seconds):
+    """Script'i izole bir alt süreçte çalıştırır.
+
+    Parametreler:
+        file_path: çalıştırılacak .py dosyasının yolu.
+        arguments: run(**arguments) ile verilecek sözlük.
+        timeout_seconds: bu süre dolunca alt süreç grubu öldürülür.
+    Dönüş: RunResult (hazırlık veya başlatma hatalarında da istisna fırlatmaz).
+    """
+    arguments_path = None
+    try:
+        # Argümanları komut satırı yerine dosyayla veriyoruz: uzunluk sınırı ve
+        # kaçış (escape) sorunları olmasın, Türkçe karakterler bozulmasın.
+        arguments_file = tempfile.NamedTemporaryFile(
+            delete=False, suffix=".json", mode="w", encoding="utf-8"
+        )
+        arguments_path = arguments_file.name
+        json.dump(arguments, arguments_file, ensure_ascii=False)
+        arguments_file.close()
+        return run_with_arguments_file(file_path, arguments_path, timeout_seconds)
+    except Exception as error:
+        # Serileştirilemeyen argüman, olmayan klasör gibi hazırlık hataları.
+        return RunResult(False, None, "", "Script başlatılamadı: %s" % error, 0)
+    finally:
+        # Geçici dosya her durumda silinir.
+        if arguments_path is not None and os.path.exists(arguments_path):
+            os.unlink(arguments_path)
