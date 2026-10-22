@@ -1,0 +1,8 @@
+{
+  "forms.required": "{field} zorunludur",
+  "forms.not_number": "{field} geçerli bir sayı olmalıdır",
+  "forms.not_bool": "{field} doğru/yanlış değeri olmalıdır",
+  "forms.too_small": "{field} en az {min} olmalıdır",
+  "forms.too_large": "{field} en çok {max} olmalıdır",
+  "forms.not_in_options": "{field} için geçersiz seçim"
+}

@@ -1,0 +1,8 @@
+{
+  "forms.required": "{field} is required",
+  "forms.not_number": "{field} must be a valid number",
+  "forms.not_bool": "{field} must be a true/false value",
+  "forms.too_small": "{field} must be at least {min}",
+  "forms.too_large": "{field} must be at most {max}",
+  "forms.not_in_options": "Invalid choice for {field}"
+}
