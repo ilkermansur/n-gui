@@ -97,6 +97,9 @@ def test_nav_items_respect_visibility_and_permission(kernel, menu):
 
 def test_nav_items_without_auth_show_all_visible(menu):
     """auth servisi yoksa izin süzmesi yapılmaz; grup ebeveynine bağlanır."""
+    # Neden: sistem bölümleri sahibi eklenti yüklüyse görünür.
+    menu.kernel.plugin_status["audit_log"] = "loaded"
+    menu.kernel.plugin_status["settings_core"] = "loaded"
     menu.create_group("operation", "Hatlar", "Lines")
     items = menu.build_menu_nav_items(None)
     assert len(items) == 6
@@ -112,3 +115,32 @@ def test_deleted_default_section_stays_deleted_after_reseed(menu):
     for section in menu.list_sections():
         keys.append(section["key"])
     assert "report" not in keys
+
+
+def test_system_section_hidden_when_owner_plugin_not_loaded(kernel, menu):
+    """Sahibi eklenti yüklenmemişse log ve settings bölümü menüde görünmez."""
+    kernel.plugin_status["audit_log"] = "disabled"
+    kernel.plugin_status["settings_core"] = "not selected"
+
+    items = menu.build_menu_nav_items(None)
+
+    keys = []
+    for item in items:
+        keys.append(item.key)
+    assert "section:log" not in keys
+    assert "section:settings" not in keys
+    assert "section:dashboard" in keys
+
+
+def test_system_section_shown_when_owner_plugin_loaded(kernel, menu):
+    """Sahibi eklenti yüklüyse log ve settings bölümü menüde görünür."""
+    kernel.plugin_status["audit_log"] = "loaded"
+    kernel.plugin_status["settings_core"] = "loaded"
+
+    items = menu.build_menu_nav_items(None)
+
+    keys = []
+    for item in items:
+        keys.append(item.key)
+    assert "section:log" in keys
+    assert "section:settings" in keys

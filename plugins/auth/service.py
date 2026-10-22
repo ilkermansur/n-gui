@@ -26,6 +26,7 @@ DEFAULT_ROLES = {
         "section.dashboard.view",
         "section.operation.view",
         "section.report.view",
+        "section.log.view",
         "log.view",
     ],
     "viewer": ["section.dashboard.view", "section.report.view"],

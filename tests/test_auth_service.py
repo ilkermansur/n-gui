@@ -55,6 +55,14 @@ def test_inactive_user_cannot_login_and_lookup_returns_none(auth):
     assert auth.get_user_by_id(user["id"]) is None
 
 
+def test_seed_operator_can_see_log_section(auth):
+    """operator rolü Log bölümünü menüde görebilmek için section.log.view iznine sahiptir."""
+    auth.seed_defaults("secret1")
+    operator = auth.create_user("o", "Operator", "pw12345", ["operator"])
+    assert auth.has_permission(operator, "section.log.view")
+    assert auth.has_permission(operator, "log.view")
+
+
 def test_has_permission_wildcard_and_specific(auth):
     """"*" her izni kapsar; diğer roller yalnızca kendi izinlerine sahiptir."""
     admin = auth.authenticate("admin", "secret1")

@@ -27,6 +27,12 @@ DEFAULT_SECTIONS = [
     ("settings", "Ayarlar", "Settings", "settings", 50, True, "/settings"),
 ]
 
+# Sistem bölümü anahtarı -> sayfasını sunan eklentinin id'si.
+# Neden: bölümler veritabanında durur, eklenti kapalıyken de kaydı kalır. Sahibi eklenti
+# yüklenmemişse bölümün sayfası yoktur (404), bu yüzden menüden gizlenir.
+# Yeni bir sistem bölümü eklenirse buraya da eklenmelidir.
+SYSTEM_SECTION_OWNERS = {"log": "audit_log", "settings": "settings_core"}
+
 
 def section_to_dict(section: Section) -> dict:
     """Section kaydını sözlüğe çevirir. Parametre: section. Dönüş: sözlük."""
@@ -226,7 +232,7 @@ class MenuService:
         """Yan menü için bölüm ve grup öğelerini üretir (nav provider).
 
         Parametre: user - giriş yapmış kullanıcı ya da None.
-        Gizli bölümler ve kullanıcının izni olmayan bölümler (ve grupları) atlanır.
+        Gizli bölümler, sahibi eklentisi yüklenmemiş sistem bölümleri ve kullanıcının izni olmayan bölümler (ve grupları) atlanır.
         "auth" servisi yoksa izin süzmesi yapılmaz; varsa ve kullanıcı yoksa liste boştur.
         """
         auth = self.kernel.get_service("auth")
@@ -237,6 +243,10 @@ class MenuService:
         visible_keys: list[str] = []
         for section in self.list_sections():
             if not section["is_visible"]:
+                continue
+            # Neden: sahibi eklenti yüklü değilse sayfa da yoktur; bölümü gösterme.
+            owner = SYSTEM_SECTION_OWNERS.get(section["key"])
+            if owner is not None and self.kernel.plugin_status.get(owner) != "loaded":
                 continue
             if auth is not None:
                 if not auth.has_permission(user, "section." + section["key"] + ".view"):

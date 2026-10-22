@@ -89,6 +89,9 @@ süzmesi yapılmaz, `i18n` yoksa çeviri anahtarları görünür.
      (parola: `[auth] initial_admin_password`; değer `"admin"` ise uyarı loglanır).
    - `menu`: `seed_defaults` ile `dashboard`, `operation`, `report`, `log` ve `settings` bölümlerini ekler.
      `register_all_section_permissions` her bölüm için `section.<key>.view` iznini kaydeder.
+     `log` ve `settings` sistem bölümleridir: menü, sahibi eklenti (`audit_log`, `settings_core`)
+     yüklü değilse bu bölümü göstermez. Eşleme `plugins/menu/service.py` içindeki
+     `SYSTEM_SECTION_OWNERS` sözlüğündedir; yeni bir sistem bölümü eklenirse oraya da eklenmelidir.
    - `scheduler`: zamanlanmış işleri eşitler.
 9. Eklenti durumları loglanır ve **`ui.run(...)`** NiceGUI sunucusunu başlatır
    (`storage_secret` oturum çerezini imzalar, `reload=False`). `scheduler` eklentisi kendi
@@ -413,7 +416,7 @@ Bir handler hata verirse `EventBus.publish` hatayı loglar ve diğer handler'lar
 | Rol | İzinler |
 |---|---|
 | `admin` | `*` (her şey) |
-| `operator` | `section.dashboard.view`, `section.operation.view`, `section.report.view`, `log.view` |
+| `operator` | `section.dashboard.view`, `section.operation.view`, `section.report.view`, `section.log.view`, `log.view` |
 | `viewer` | `section.dashboard.view`, `section.report.view` |
 
 Rol-izin eşlemesi Ayarlar > Roller ekranından değiştirilebilir. Yeni bir bölüm oluşturduğunuzda
@@ -433,9 +436,3 @@ ile imzalanmış çerez üzerinden tarayıcıya bağlıdır ve sunucuda `.nicegu
 ## 8. Bilinen sınırlar
 
 - Script runner süreç grubunu `os.killpg` ile öldürür. Bu yöntem macOS/Linux içindir, Windows desteklenmez.
-- Bölümler veridir: bir eklentiyi kapatmak, o eklentinin sayfasını gösteren bölüm kaydını silmez.
-  Örneğin `audit_log` kapatılınca menüdeki "Log" bölümü durur ama `/log` adresi 404 verir. Bölümü
-  Ayarlar > Menü ekranından gizleyebilirsiniz ("Gizle / Göster").
-- Menü bir bölümü `section.<key>.view` iznine göre gösterir. `operator` rolünde `log.view` olsa da
-  `section.log.view` olmadığı için "Log" menüde görünmez; `/log` adresi doğrudan açılabilir.
-  Menüde de görünmesi için role Ayarlar > Roller ekranından `section.log.view` izni ekleyin.
