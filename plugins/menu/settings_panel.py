@@ -208,11 +208,15 @@ class MenuEditor:
         if self.selected_key is None:
             ui.notify(t("menu.select_section"), type="warning")
             return
-        section = self.find_section(self.selected_key)
-        self.menu.update_section(
-            section["key"], section["name_tr"], section["name_en"], section["icon"],
-            section["order"], not section["is_visible"],
-        )
+        try:
+            section = self.find_section(self.selected_key)
+            self.menu.update_section(
+                section["key"], section["name_tr"], section["name_en"], section["icon"],
+                section["order"], not section["is_visible"],
+            )
+        except ValueError as error:
+            ui.notify(t("menu.error", message=str(error)), type="negative")
+            return
         self.render()
 
     def on_delete_section_click(self) -> None:

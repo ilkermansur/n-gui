@@ -98,7 +98,7 @@ class MenuService:
         Parametreler: key - yalnızca [a-z0-9_]; adlar ve ikon.
         Geçersiz ya da var olan anahtarda ValueError fırlatır.
         """
-        if not KEY_PATTERN.match(key):
+        if not KEY_PATTERN.fullmatch(key):
             raise ValueError("Bölüm anahtarı yalnızca küçük harf, rakam ve _ içerebilir.")
         with get_session() as session:
             existing = session.scalar(select(Section).where(Section.key == key))
@@ -196,8 +196,13 @@ class MenuService:
     # ---------- Hazır kayıtlar ----------
 
     def seed_defaults(self) -> None:
-        """Hazır beş bölümü ekler; var olan anahtara dokunmaz (tekrar çağrılabilir)."""
+        """Hazır beş bölümü yalnızca bölüm tablosu boşsa ekler (tekrar çağrılabilir).
+
+        Neden: admin hazır bir bölümü sildiyse yeniden başlatmada geri gelmemeli.
+        """
         with get_session() as session:
+            if session.scalar(select(Section).limit(1)) is not None:
+                return
             for key, name_tr, name_en, icon, order, is_system, path in DEFAULT_SECTIONS:
                 existing = session.scalar(select(Section).where(Section.key == key))
                 if existing is not None:

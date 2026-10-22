@@ -51,6 +51,8 @@ def test_create_section_rejects_bad_key(menu):
     """Geçersiz anahtar ValueError verir."""
     with pytest.raises(ValueError):
         menu.create_section("Ürün B", "Ürün B", "Product B", "folder")
+    with pytest.raises(ValueError):
+        menu.create_section("abc\n", "Abc", "Abc", "folder")
 
 
 def test_create_section_registers_permission(kernel, menu):
@@ -100,3 +102,13 @@ def test_nav_items_without_auth_show_all_visible(menu):
     assert len(items) == 6
     assert items[-1].parent_key == "section:operation"
     assert items[-1].key.startswith("group:")
+
+
+def test_deleted_default_section_stays_deleted_after_reseed(menu):
+    """Silinen hazır bölüm yeniden seed'de geri gelmez."""
+    menu.delete_section("report")
+    menu.seed_defaults()
+    keys = []
+    for section in menu.list_sections():
+        keys.append(section["key"])
+    assert "report" not in keys
