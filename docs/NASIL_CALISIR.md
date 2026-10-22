@@ -1,5 +1,8 @@
 # N-GUI Nasıl Çalışır?
 
+> Diğer rehberler: kullanım ve işletme için [ADMINISTRATION_GUIDE.md](ADMINISTRATION_GUIDE.md),
+> mimari, tasarım kararları ve görsel tasarım sistemi için [DESIGN_GUIDE.md](DESIGN_GUIDE.md).
+
 Bu rehber, kod tabanını devralan geliştirici için yazıldı. Amaç şu: herhangi bir dosyayı açtığınızda
 "bu nereden çağrılıyor, kime bağlanıyor" sorusunun cevabını bilmeniz. Her bölüm gerçek dosya ve
 fonksiyon adlarını kullanır; ayrıntı için ilgili dosyanın başındaki açıklama bloğunu okuyun.
@@ -99,6 +102,8 @@ süzmesi yapılmaz, `i18n` yoksa çeviri anahtarları görünür.
 
 `main.py` ayrıca `"/"` sayfasını (`home_page`) kaydeder. Bu sayfa giriş kontrolünden sonra
 kullanıcının menüsündeki ilk sayfaya (`find_first_page_path`) yönlendirir. Menü boşsa boş bir kabuk gösterir.
+`ui.run(root=not_found_page)` ile verilen `not_found_page` ise eşleşen sayfası olmayan her adreste
+çağrılır ve kabuk içinde çevrilmiş bir "Sayfa bulunamadı" kartı çizer (kapalı bir eklentinin `/log` adresi gibi).
 
 ---
 
@@ -124,20 +129,27 @@ kullanıcının menüsündeki ilk sayfaya (`find_first_page_path`) yönlendirir.
    - İzin yoksa çerçeve ve "Bu sayfaya erişim izniniz yok" kartı çizilir, `False` döner.
      Kullanıcı menüyü kullanarak başka sayfaya geçebilir.
 3. **`create_shell_frame(kernel, başlık)`** (`app/core/layout.py`):
-   - `apply_theme()`: renkler, font ve koyu tema. Koyu tema `app.storage.user["dark_mode"]` değerine bağlıdır.
-   - `kernel.collect_nav_items(user)` tüm menü sağlayıcılarını çağırır (`menu` bölüm ve grupları,
-     `script_engine` script'leri verir). Hata veren sağlayıcı atlanır.
-   - `build_navigation_tree` düz listeyi `parent_key` ile ağaca çevirir. Ebeveyni olmayan (sahipsiz) öğeler atılır.
-   - `draw_sidebar` sol menüyü, `draw_header` üst çubuğu çizer: menü düğmesi, başlık, arama,
-     TR/EN düğmesi (`on_language_click`: dili değiştirir ve sayfayı yeniden yükler), tema düğmesi
-     (`on_dark_mode_click`) ve kullanıcı menüsü ("Çıkış" için `on_logout_click`).
+   - `apply_theme()`: renkler, font, ek CSS (`EXTRA_CSS`) ve koyu tema. Koyu tema `app.storage.user["dark_mode"]`
+     değerine bağlıdır. Ayrıca sayfaya `<html lang>` değerini ve Türkçe için Quasar dil paketini ekler.
+   - `draw_sidebar` sol menünün çerçevesini (logo ve boş bir menü kolonu), `draw_header` üst çubuğu
+     çizer: menü düğmesi, başlık, arama, TR/EN düğmesi (`on_language_click`: dili değiştirir ve sayfayı
+     yeniden yükler), tema düğmesi (`on_dark_mode_click`; ipucu geçilecek temayı söyler) ve kullanıcı
+     menüsü ("Çıkış" için `on_logout_click`). Telefon genişliğinde arama ve kullanıcı adı gizlenir.
+   - İç fonksiyon `redraw_navigation` menüyü doldurur: `kernel.collect_nav_items(user)` tüm menü
+     sağlayıcılarını çağırır (`menu` bölüm ve grupları, `script_engine` script'leri verir; hata veren
+     sağlayıcı atlanır), `build_navigation_tree` düz listeyi `parent_key` ile ağaca çevirir (sahipsiz
+     öğeler atılır), ağaç menü kolonuna çizilir ve arama seçenekleri güncellenir. Fonksiyon
+     `app.storage.client` içinde saklanır.
    - Dönüş değeri içerik kolonudur (`ui.column`).
 4. **İçerik**: sayfa kendi kartlarını `with content:` bloğu içine çizer (`page_card()`, `stat_card()`, `empty_state()`...).
 
 Önemli ayrıntılar:
 
-- Menü her sayfa çiziminde yeniden hesaplanır. Ayarlar'da yapılan bir değişiklik (yeni bölüm,
-  yayınlanan script) bir sonraki sayfa açılışında menüye yansır.
+- Menü her sayfa çiziminde yeniden hesaplanır. Ayarlar'daki paneller menüyü etkileyen bir
+  değişiklikten sonra (script yayınlama/kaldırma/devre dışı bırakma, bölüm ve grup düzenleme, rol
+  değişikliği) `refresh_navigation()` çağırır; açık sekmenin menüsü sayfa yenilenmeden güncellenir.
+  Diğer kullanıcılar değişikliği bir sonraki sayfa açılışında görür. `refresh_navigation()` paneli
+  yeniden çizmeden **önce** çağrılmalıdır: yeniden çizim tıklanan düğmeyi siler ve NiceGUI bağlamı kaybolur.
 - Metinler `t()` ile çizim anında çevrilir. Dil `app.storage.user["language"]` içinde durur.
   Bir anahtar seçilen dilde yoksa önce `en`, o da yoksa anahtarın kendisi gösterilir.
 - `/script/{script_id}` sayfası `check_page_access(kernel, None)` ile yalnızca girişi kontrol eder.
@@ -184,7 +196,7 @@ kullanıcının menüsündeki ilk sayfaya (`find_first_page_path`) yönlendirir.
 
 **5. Form** (`plugins/script_engine/script_page.py`, `/script/{script_id}`):
 - Sayfa `check_page_access(kernel, None)` ve `user_may_run` kontrollerinden sonra `ScriptPageView.build()` ile çizilir.
-- Mod `form` ise `forms.build_form(spec.fields)` iki sütunlu formu çizer. "Çalıştır" düğmesi
+- Mod `form` ise `forms.build_form(spec.fields)` iki sütunlu (telefonda tek sütun) formu çizer. "Çalıştır" düğmesi
   `on_run_click` metodunu çağırır. Bu metot `form.submit()` ile değerleri doğrular; hata varsa script çalıştırılmaz.
 
 **6. Subprocess** (`service.execute` → `prepare_and_run` → `runner.run_script`):
@@ -207,7 +219,8 @@ kullanıcının menüsündeki ilk sayfaya (`find_first_page_path`) yönlendirir.
 **9. Log**: `audit_log` eklentisi `on_script_finished` ile bu olayı `action="script.run"`,
 `status="ok"/"error"` olarak `AuditEntry` tablosuna yazar. Kayıt `/log` sayfasında görünür.
 
-**Sonuç gösterimi** (`result_view.py`): değerleri tek değer (skaler) olan bir `dict` istatistik kartlarına,
+**Sonuç gösterimi** (`result_view.py`): değerleri tek değer (skaler) olan bir `dict` istatistik kartlarına
+(`True`/`False` "Evet"/"Hayır", `None` "-" olarak gösterilir; `display_value`),
 `dict` listesi tabloya dönüşür. `str` kod bloğu olarak, diğer değerler salt okunur JSON olarak gösterilir.
 `print` çıktısı "Çıktı" bölümünde görünür.
 
@@ -388,7 +401,7 @@ göstermek için istisna fırlatın: sonuç "Başarısız" olur ve traceback "Ha
 | `auth.logout` | `auth/service.py` | `{"username"}` | `audit_log` |
 | `script.finished` | `script_engine/service.py` (`execute`) | `{"username", "script_id", "success", "duration_ms", "error_text"}` | `audit_log` (`script.run`) |
 | `scripts.changed` | `script_engine/service.py` | `{"script_id", "change", "username"}`; `change`: `published`/`enabled`/`disabled`/`removed` | `audit_log`, `scheduler` |
-| `settings.changed` | `settings_core/changes.py` | `{"username", "setting", "details"}` | `audit_log` |
+| `settings.changed` | `settings_core/changes.py`, `menu/settings_panel.py` | `{"username", "setting", "details"}`; `setting`: `users`/`roles`/`database`/`menu` | `audit_log` |
 
 Bir handler hata verirse `EventBus.publish` hatayı loglar ve diğer handler'ları çağırmaya devam eder.
 

@@ -11,7 +11,13 @@ Sonuç ekranda görünür, kayıt da Log'a düşer.
 - **Menü veridir**: bölümler ve gruplar veritabanında tutulur ve Ayarlar'dan kod yazmadan değiştirilir.
 - TR/EN arayüz, açık/koyu tema, rol tabanlı yetki (admin / operator / viewer).
 
-Nasıl çalıştığının ayrıntılı anlatımı: **[docs/NASIL_CALISIR.md](docs/NASIL_CALISIR.md)**
+Dokümanlar:
+
+- **[docs/ADMINISTRATION_GUIDE.md](docs/ADMINISTRATION_GUIDE.md)**: kurulum, ayarlar, kullanıcı/rol/menü/script
+  yönetimi, Log, yedekleme ve sorun giderme (yöneticiler ve operatörler için).
+- **[docs/DESIGN_GUIDE.md](docs/DESIGN_GUIDE.md)**: mimari, eklenti modeli, veri modeli, yetki ve menü modeli,
+  script motorunun tasarımı, görsel tasarım sistemi, kod kuralları ve genişletme tarifleri (geliştiriciler için).
+- **[docs/NASIL_CALISIR.md](docs/NASIL_CALISIR.md)**: adım adım kod turu ve script docstring başvurusu.
 
 ## Kurulum
 

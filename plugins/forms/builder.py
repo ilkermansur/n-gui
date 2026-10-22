@@ -2,7 +2,7 @@
 
 Kim kullanır: "forms" servisi (build_form); ileride script motoru ve sayfalar.
 Nasıl bağlanır: her alan tipi için ayrı bir create_<tip>_widget(field) fonksiyonu
-vardır; build_form bunları if/elif zinciriyle seçer, iki sütunlu bir grid'e koyar
+vardır; build_form bunları if/elif zinciriyle seçer, iki sütunlu (telefonda tek sütun) bir grid'e koyar
 ve FormHandle döndürür. FormHandle.submit() değerleri validation.py ile doğrular
 ve hataları her alanın altında gösterir.
 """

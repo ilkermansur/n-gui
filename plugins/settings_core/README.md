@@ -17,6 +17,7 @@ Sekme sırası: users, roles, menu, system, database; bilinmeyenler kayıt sıra
 
 ## Olaylar
 Paneller `settings.changed` yayınlar: `{"username", "setting", "details"}` (`details` içinde parola bulunmaz).
+Rol izinleri ve kullanıcı rolleri değişince açık sekmenin sol menüsü `refresh_navigation()` ile yenilenir.
 
 ## Bağımlılık ve devre dışı bırakma
 `requires = ["auth"]`. `config.toml` içindeki `[plugins] disabled` listesine `"settings_core"` ekleyin; `/settings` açılmaz.

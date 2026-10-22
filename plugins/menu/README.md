@@ -18,6 +18,11 @@ Başka eklentiler öğelerini `parent_key="section:<key>"` ile bir bölümün al
 ## İzinler
 `section.<key>.view` (her bölüm için), `settings.menu.manage`
 
+## Olaylar
+Menü panelindeki her değişiklik (bölüm ekle/düzenle/gizle/göster/sil, grup ekle/sil) `settings.changed`
+olayını `{"username", "setting": "menu", "details"}` verisiyle yayınlar; audit_log bunu Log'a yazar.
+Grup silme onay ister. Değişiklikten sonra açık sekmenin sol menüsü `refresh_navigation()` ile yenilenir.
+
 ## Hazır kayıtlar (seed)
 `database.ready` olayında bir kez eklenir: dashboard, operation, report, log, settings.
 `log` (`/log`) ve `settings` (`/settings`) sistem bölümüdür: silinemez, ama yeniden adlandırılabilir.

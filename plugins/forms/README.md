@@ -5,7 +5,7 @@ Bir script'in girdi tariflerinden (`FieldSpec` listesi) NiceGUI formu çizer ve
 gönderilen değerleri tiplere çevirip doğrular. Doğrulama UI'dan bağımsızdır.
 
 ## Servis (`kernel.get_service("forms")`)
-- `build_form(fields)` - çağrıldığı yere iki sütunlu bir form çizer, `FormHandle` döner
+- `build_form(fields)` - çağrıldığı yere iki sütunlu (telefonda tek sütun) bir form çizer, `FormHandle` döner
   - `handle.get_raw_values()` - widget'lardaki ham değerler
   - `handle.submit()` - `(değerler, hatalar)` döner; hatalar alanın altında gösterilir, eskiler silinir
 - `convert_and_validate(fields, raw_values)` - `(değerler, hata_mesajları)`; mesajlar çevrilmiştir
