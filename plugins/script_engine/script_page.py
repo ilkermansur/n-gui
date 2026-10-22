@@ -24,17 +24,6 @@ from app.core.widgets import page_card, status_badge
 from plugins.script_engine.result_view import show_empty_result, show_result, show_run_texts
 
 
-def get_username(kernel) -> str:
-    """Giriş yapmış kullanıcının adını döndürür; "auth" yoksa boş metin."""
-    auth = kernel.get_service("auth")
-    if auth is None:
-        return ""
-    user = auth.current_user()
-    if user is None:
-        return ""
-    return user["username"]
-
-
 def user_may_run(kernel, service, entry: dict) -> bool:
     """Giriş yapmış kullanıcı bu kaydı çalıştırabilir mi? "auth" yoksa herkes çalıştırır."""
     auth = kernel.get_service("auth")
@@ -93,6 +82,7 @@ class ScriptPageView:
         self.runs_table = None
         self.runs_by_id = {}
         self.timer = None
+        self.live_first_run_done = False
         self.updated_label = None
         self.run_dialog = None
 
@@ -205,7 +195,7 @@ class ScriptPageView:
         self.spinner.set_visibility(True)
         try:
             result = await run.io_bound(
-                self.service.execute, self.script_id, values, get_username(self.kernel)
+                self.service.execute, self.script_id, values, self.service.current_username()
             )
         finally:
             self.run_button.enable()
@@ -219,11 +209,21 @@ class ScriptPageView:
 
     async def refresh_live_result(self) -> None:
         """Canlı mod zamanlayıcısının her tetiklenişinde script'i çalıştırıp sonucu yeniden çizer."""
+        # Neden: yalnızca sayfa açılışındaki ilk çalıştırma geçmişe yazılır; periyodik
+        # yenilemeler yalnızca başarısız olursa kaydedilir (Log dolmasın).
+        record_success = not self.live_first_run_done
+        self.live_first_run_done = True
         self.spinner.set_visibility(True)
-        result = await run.io_bound(
-            self.service.execute, self.script_id, self.collect_default_values(), get_username(self.kernel)
-        )
-        self.spinner.set_visibility(False)
+        try:
+            result = await run.io_bound(
+                self.service.execute,
+                self.script_id,
+                self.collect_default_values(),
+                self.service.current_username(),
+                record_success=record_success,
+            )
+        finally:
+            self.spinner.set_visibility(False)
         if result is None:
             return
         self.draw_result(result)

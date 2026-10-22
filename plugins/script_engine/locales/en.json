@@ -80,5 +80,7 @@
   "script_engine.wizard.refresh": "Refresh interval (s)",
   "script_engine.wizard.schedule": "Schedule (cron)",
   "script_engine.wizard.title_required": "Title (TR) cannot be empty.",
-  "script_engine.wizard.section_required": "Choose a section."
+  "script_engine.wizard.section_required": "Choose a section.",
+  "script_engine.wizard.new_group_hint": "If 'New group' is filled, that name is used instead of the selected group; it is created on publish.",
+  "script_engine.wizard.seconds_invalid": "Timeout and refresh interval must be at least 1 second."
 }

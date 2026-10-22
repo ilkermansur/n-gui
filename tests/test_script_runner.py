@@ -145,3 +145,18 @@ def test_unserializable_arguments_do_not_raise(tmp_path):
     result = run_script(path, {"x": object()}, 10)
     assert result.success is False
     assert "Script başlatılamadı" in result.error_text
+
+
+def test_relative_path_is_resolved(tmp_path, monkeypatch):
+    """Göreli dosya yolu da çalışır ve script klasörüne __pycache__ yazılmaz."""
+    folder = tmp_path / "scripts"
+    folder.mkdir()
+    (folder / "helper.py").write_text("VALUE = 7\n", encoding="utf-8")
+    (folder / "rel.py").write_text(
+        "import helper\n\ndef run(**inputs):\n    return helper.VALUE\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+    result = run_script(os.path.join("scripts", "rel.py"), {}, 10)
+    assert result.success is True, result.error_text
+    assert result.result == 7
+    assert not (folder / "__pycache__").exists()

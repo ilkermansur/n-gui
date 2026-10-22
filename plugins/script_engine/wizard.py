@@ -181,6 +181,10 @@ class ScriptWizard:
 
         Parametre: event - NiceGUI upload olayı (event.file.name, await event.file.read()).
         """
+        if not self.service.current_user_can_manage():
+            ui.notify(t("shell.forbidden"), type="negative")
+            self.upload.reset()
+            return
         content = await event.file.read()
         try:
             path = self.service.save_uploaded_file(event.file.name, content, self.overwrite_switch.value)
@@ -422,6 +426,7 @@ class ScriptWizard:
                 self.refresh_input.props("outlined").classes("w-full")
                 self.schedule_input = ui.input(t("script_engine.wizard.schedule"), value=values["schedule"])
                 self.schedule_input.props("outlined").classes("w-full")
+            ui.label(t("script_engine.wizard.new_group_hint")).classes(LABEL_CLASSES)
             ui.label(t("script_engine.wizard.roles_hint")).classes(LABEL_CLASSES)
         self.update_mode_fields()
 
@@ -440,7 +445,15 @@ class ScriptWizard:
         self.schedule_input.set_visibility(mode == "scheduled")
 
     def on_publish_click(self) -> None:
-        """Seçimleri doğrular, gerekirse yeni grubu oluşturur ve script'i yayınlar."""
+        """Seçimleri doğrular, gerekirse yeni grubu oluşturur ve script'i yayınlar.
+
+        Önce bütün alanlar denetlenir; yeni grup ancak yayından hemen önce oluşturulur
+        ve yayın hata verirse bu grup geri silinir (menüde boş grup kalmasın).
+        "Yeni grup" kutusu doluysa seçili grubun yerine o kullanılır.
+        """
+        if not self.service.current_user_can_manage():
+            ui.notify(t("shell.forbidden"), type="negative")
+            return
         title_tr = (self.title_tr_input.value or "").strip()
         title_en = (self.title_en_input.value or "").strip()
         section_key = self.section_select.value
@@ -453,16 +466,21 @@ class ScriptWizard:
 
         timeout = int(self.timeout_input.value or 60)
         refresh = int(self.refresh_input.value or 30)
+        if timeout < 1 or refresh < 1:
+            ui.notify(t("script_engine.wizard.seconds_invalid"), type="warning")
+            return
         schedule = (self.schedule_input.value or "").strip()
         new_group_name = (self.new_group_input.value or "").strip()
         was_new = self.entry is None
 
+        group_id = self.group_select.value
+        if group_id == NO_GROUP:
+            group_id = None
+        created_group_id = None
         try:
-            group_id = self.group_select.value
             if new_group_name != "":
-                group_id = self.menu.create_group(section_key, new_group_name, new_group_name)
-            if group_id == NO_GROUP:
-                group_id = None
+                created_group_id = self.menu.create_group(section_key, new_group_name, new_group_name)
+                group_id = created_group_id
             self.service.publish(
                 self.script_id,
                 title_tr,
@@ -474,9 +492,12 @@ class ScriptWizard:
                 timeout,
                 refresh,
                 schedule,
-                username=self.current_username(),
+                username=self.service.current_username(),
             )
-        except ValueError as error:
+        except Exception as error:
+            # Neden geniş yakalama: DB veya dosya hataları da kullanıcıya bildirim olarak gösterilmeli.
+            if created_group_id is not None:
+                self.menu.delete_group(created_group_id)
             ui.notify(t("script_engine.error", message=str(error)), type="negative")
             return
 
@@ -490,13 +511,3 @@ class ScriptWizard:
             ui.navigate.to("/script/" + self.script_id)
             return
         self.on_published()
-
-    def current_username(self) -> str:
-        """Giriş yapmış kullanıcının adını döndürür; "auth" yoksa boş metin."""
-        auth = self.kernel.get_service("auth")
-        if auth is None:
-            return ""
-        user = auth.current_user()
-        if user is None:
-            return ""
-        return user["username"]

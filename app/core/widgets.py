@@ -25,6 +25,20 @@ def page_card() -> ui.card:
     return ui.card().props("flat").classes(CARD_CLASSES + " w-full")
 
 
+# İstatistik kartında gösterilecek en uzun değer; uzun metin kesilir, tamamı ipucunda görünür.
+STAT_VALUE_MAX_LENGTH = 40
+
+
+def shorten_stat_value(text: str) -> str:
+    """Uzun değeri STAT_VALUE_MAX_LENGTH karaktere kısaltır ve sonuna "…" ekler.
+
+    Parametre: text - gösterilecek metin. Dönüş: kısa metin (kısaysa aynısı).
+    """
+    if len(text) <= STAT_VALUE_MAX_LENGTH:
+        return text
+    return text[:STAT_VALUE_MAX_LENGTH] + "…"
+
+
 def stat_card(title: str, value, hint: str = "") -> None:
     """Dashboard için istatistik kartı çizer: küçük etiket, büyük sayı, isteğe bağlı rozet.
 
@@ -34,7 +48,11 @@ def stat_card(title: str, value, hint: str = "") -> None:
     """
     with ui.card().props("flat").classes(CARD_CLASSES + " min-w-[220px] flex-1 gap-2"):
         ui.label(title).classes(LABEL_CLASSES)
-        ui.label(str(value)).classes(VALUE_CLASSES)
+        value_text = str(value)
+        # Neden break-all: boşluksuz uzun değerler (yol, URL) kartın dışına taşmasın.
+        value_label = ui.label(shorten_stat_value(value_text)).classes(VALUE_CLASSES + " break-all")
+        if len(value_text) > STAT_VALUE_MAX_LENGTH:
+            value_label.tooltip(value_text)
         if hint:
             status_badge(hint, "green")
 

@@ -80,5 +80,7 @@
   "script_engine.wizard.refresh": "Yenileme aralığı (sn)",
   "script_engine.wizard.schedule": "Zamanlama (cron)",
   "script_engine.wizard.title_required": "Başlık (TR) boş olamaz.",
-  "script_engine.wizard.section_required": "Bir bölüm seçin."
+  "script_engine.wizard.section_required": "Bir bölüm seçin.",
+  "script_engine.wizard.new_group_hint": "'Yeni grup' doluysa seçili grup yerine bu ad kullanılır; grup yayınlanınca oluşturulur.",
+  "script_engine.wizard.seconds_invalid": "Zaman aşımı ve yenileme aralığı en az 1 saniye olmalı."
 }

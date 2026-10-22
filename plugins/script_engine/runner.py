@@ -109,7 +109,8 @@ def run_with_arguments_file(file_path, arguments_path, timeout_seconds):
     Dönüş: RunResult.
     """
     script_folder = os.path.dirname(os.path.abspath(file_path))
-    command = [sys.executable, "-I", SHIM_PATH, file_path, arguments_path]
+    # Neden -B: alt süreç script klasörüne __pycache__ yazmasın.
+    command = [sys.executable, "-I", "-B", SHIM_PATH, file_path, arguments_path]
     child_env = dict(os.environ)
     child_env["PYTHONIOENCODING"] = "utf-8"
 
@@ -175,6 +176,8 @@ def run_script(file_path, arguments, timeout_seconds):
     Dönüş: RunResult (hazırlık veya başlatma hatalarında da istisna fırlatmaz).
     """
     arguments_path = None
+    # Neden abspath: alt süreç script klasöründe (cwd) başlar; göreli yol orada bozulur.
+    file_path = os.path.abspath(file_path)
     try:
         # Argümanları komut satırı yerine dosyayla veriyoruz: uzunluk sınırı ve
         # kaçış (escape) sorunları olmasın, Türkçe karakterler bozulmasın.

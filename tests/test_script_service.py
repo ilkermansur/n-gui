@@ -273,3 +273,54 @@ def test_set_enabled_and_changed_events(service, kernel):
         assert data["script_id"] == "toplama"
         changes.append(data["change"])
     assert changes == ["published", "disabled", "removed"]
+
+
+def test_execute_without_record_success_skips_history_on_success_but_records_failure(service, kernel):
+    """record_success=False: başarılı çalışma kaydedilmez/yayınlanmaz, başarısız olan kaydedilir."""
+    received = []
+    kernel.events.subscribe("script.finished", received.append)
+    service.save_uploaded_file("toplama.py", GOOD_SCRIPT.encode("utf-8"), False)
+    publish_default(service, "toplama")
+
+    result = service.execute("toplama", {"count": 3}, "ali", record_success=False)
+    assert result.success is True
+    assert result.result == {"count": 3, "double": 6}
+    assert received == []
+    assert service.list_runs("toplama") == []
+
+    failed = service.execute("toplama", {"count": 99}, "ali", record_success=False)
+    assert failed.success is False
+    assert len(received) == 1
+    assert received[0]["success"] is False
+    assert len(service.list_runs("toplama")) == 1
+
+
+def test_publish_rejects_timeout_or_refresh_below_one(service):
+    """timeout ve refresh en az 1 olmalı; aksi halde ValueError ve kayıt oluşmaz."""
+    service.save_uploaded_file("toplama.py", GOOD_SCRIPT.encode("utf-8"), False)
+    with pytest.raises(ValueError):
+        service.publish("toplama", "T", "T", "operation", None, "form", [], 0, 30, "")
+    with pytest.raises(ValueError):
+        service.publish("toplama", "T", "T", "operation", None, "live", [], 30, 0, "")
+    assert service.get_entry("toplama") is None
+
+
+class FakeAuthWithUser:
+    """current_user() ile sabit bir kullanıcı döndüren sahte auth servisi."""
+
+    def __init__(self, user):
+        """Parametre: user - döndürülecek kullanıcı sözlüğü ya da None."""
+        self.user = user
+
+    def current_user(self):
+        """Saklanan kullanıcıyı döndürür."""
+        return self.user
+
+
+def test_current_username(service, kernel):
+    """auth yoksa ya da kullanıcı yoksa boş metin, varsa kullanıcı adı döner."""
+    assert service.current_username() == ""
+    kernel.register_service("auth", FakeAuthWithUser(None))
+    assert service.current_username() == ""
+    kernel.register_service("auth", FakeAuthWithUser({"username": "ali"}))
+    assert service.current_username() == "ali"

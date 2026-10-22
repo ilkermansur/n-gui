@@ -312,6 +312,10 @@ class ScriptService:
             raise ValueError(spec.error)
         if mode not in ALLOWED_MODES:
             raise ValueError("Geçersiz mod: " + str(mode))
+        if int(timeout) < 1:
+            raise ValueError("Zaman aşımı en az 1 saniye olmalı")
+        if int(refresh) < 1:
+            raise ValueError("Yenileme aralığı en az 1 saniye olmalı")
         self.check_placement(section_key, group_id)
 
         with get_session() as session:
@@ -397,6 +401,31 @@ class ScriptService:
                 return True
         return False
 
+    def current_username(self) -> str:
+        """Giriş yapmış kullanıcının adını döndürür; "auth" servisi ya da kullanıcı yoksa boş metin.
+
+        İstek bağlamında (sayfa/handler) çağrılmalıdır; sayfalar ve sihirbaz bunu kullanır.
+        """
+        auth = self.kernel.get_service("auth")
+        if auth is None:
+            return ""
+        user = auth.current_user()
+        if user is None:
+            return ""
+        return user["username"]
+
+    def current_user_can_manage(self) -> bool:
+        """Giriş yapmış kullanıcının "scripts.manage" izni var mı?
+
+        "auth" servisi yoksa True (yetki sistemi yok). İstek bağlamında çağrılmalıdır;
+        panel ve sihirbaz handler'ları, panel açıkken izin geri alınmış olabileceği için
+        işlemden önce bunu tekrar kontrol eder.
+        """
+        auth = self.kernel.get_service("auth")
+        if auth is None:
+            return True
+        return auth.has_permission(auth.current_user(), "scripts.manage")
+
     # ---------- Menü ----------
 
     def build_nav_items(self, user: dict | None) -> list[NavItem]:
@@ -440,10 +469,15 @@ class ScriptService:
 
     # ---------- Çalıştırma ----------
 
-    def execute(self, script_id: str, arguments: dict, username: str) -> RunResult:
+    def execute(
+        self, script_id: str, arguments: dict, username: str, record_success: bool = True
+    ) -> RunResult:
         """Script'i çalıştırır, sonucu ScriptRun olarak yazar ve "script.finished" yayınlar.
 
-        Parametreler: script_id; arguments - formdan gelen değerler; username - çalıştıran.
+        Parametreler: script_id; arguments - formdan gelen değerler; username - çalıştıran;
+        record_success - False ise BAŞARILI çalışma geçmişe yazılmaz ve olay yayınlanmaz
+        (canlı moddaki periyodik yenilemeler Log'u doldurmasın diye); başarısız
+        çalışma her durumda kaydedilir.
         Dönüş: RunResult (hata fırlatmaz). Dosya her çağrıda taze okunur, böylece
         diskteki değişiklikler hemen etkili olur. Argümanlar "forms" servisiyle
         doğrulanır; hata varsa script hiç çalıştırılmaz ama başarısız kayıt yazılır.
@@ -451,6 +485,8 @@ class ScriptService:
         """
         started_at = datetime.now()
         result = self.prepare_and_run(script_id, arguments)
+        if result.success and not record_success:
+            return result
         self.record_run(script_id, username, started_at, result)
         self.kernel.events.publish(
             "script.finished",

@@ -185,12 +185,15 @@ class ScriptsPanel:
 
     def on_toggle_event(self, event) -> None:
         """Satırdaki etkin/devre dışı düğmesi: durumu tersine çevirir."""
+        if not self.service.current_user_can_manage():
+            ui.notify(t("shell.forbidden"), type="negative")
+            return
         script_id = event.args["script_id"]
         entry = self.service.get_entry(script_id)
         if entry is None:
             return
         try:
-            self.service.set_enabled(script_id, not entry["is_enabled"], username=self.current_username())
+            self.service.set_enabled(script_id, not entry["is_enabled"], username=self.service.current_username())
         except ValueError as error:
             ui.notify(t("script_engine.error", message=str(error)), type="negative")
             return
@@ -211,8 +214,12 @@ class ScriptsPanel:
 
     def on_confirm_remove(self) -> None:
         """Onaydan sonra script'i menüden ve diskten kaldırır."""
+        if not self.service.current_user_can_manage():
+            self.dialog.close()
+            ui.notify(t("shell.forbidden"), type="negative")
+            return
         try:
-            self.service.remove(self.pending_remove_id, username=self.current_username())
+            self.service.remove(self.pending_remove_id, username=self.service.current_username())
         except (ValueError, OSError) as error:
             self.dialog.close()
             ui.notify(t("script_engine.error", message=str(error)), type="negative")
@@ -221,15 +228,6 @@ class ScriptsPanel:
         ui.notify(t("script_engine.removed"), type="positive")
         self.render()
 
-    def current_username(self) -> str:
-        """Giriş yapmış kullanıcının adını döndürür; "auth" yoksa boş metin."""
-        auth = self.kernel.get_service("auth")
-        if auth is None:
-            return ""
-        user = auth.current_user()
-        if user is None:
-            return ""
-        return user["username"]
 
 
 def build_scripts_settings_panel() -> None:
