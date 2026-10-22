@@ -24,6 +24,8 @@ class AppConfig:
     default_language: str = "tr"
     port: int = 8080
     initial_admin_password: str = "admin"
+    # Neden burada: ayarlar sayfası değişiklikleri hangi dosyaya yazacağını bilmeli.
+    config_path: str = "config.toml"
 
 
 def load_config(path: str) -> AppConfig:
@@ -33,6 +35,7 @@ def load_config(path: str) -> AppConfig:
     Dönüş: AppConfig; dosya yoksa ya da bir değer eksikse varsayılanlar kullanılır.
     """
     config = AppConfig()
+    config.config_path = path
 
     # Neden: dosya yoksa uygulama yine de varsayılanlarla açılabilmeli.
     if not Path(path).exists():

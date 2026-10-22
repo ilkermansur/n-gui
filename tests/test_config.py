@@ -5,8 +5,11 @@ from app.core.config import AppConfig, load_config, save_config_value
 
 def test_missing_file_returns_defaults(tmp_path):
     """Olmayan dosya verilince varsayılan AppConfig dönmeli."""
-    result = load_config(str(tmp_path / "yok.toml"))
-    assert result == AppConfig()
+    path = str(tmp_path / "yok.toml")
+    expected = AppConfig()
+    # Neden: config_path yüklenen dosyanın yolunu tutar, geri kalanı varsayılan olmalı.
+    expected.config_path = path
+    assert load_config(path) == expected
 
 
 def test_reads_values(tmp_path):
@@ -50,3 +53,10 @@ def test_save_config_value_keeps_comments(tmp_path):
     assert result.database_url == "b"
     assert result.port == 9000
     assert result.disabled_plugins == ["x"]
+
+
+def test_load_config_remembers_path(tmp_path):
+    """load_config okunan dosyanın yolunu config_path alanında saklamalı (dosya olmasa da)."""
+    path = str(tmp_path / "yok.toml")
+    assert load_config(path).config_path == path
+    assert AppConfig().config_path == "config.toml"

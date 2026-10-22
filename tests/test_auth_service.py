@@ -87,3 +87,33 @@ def test_duplicate_username_raises_valueerror(auth):
 def test_username_is_case_insensitive_on_login(auth):
     """"Admin" yazarak da giriş yapılabilir."""
     assert auth.authenticate("  Admin ", "secret1") is not None
+
+
+def test_create_user_rejects_bad_password_length(auth):
+    """Kısa (<4) ve 72 bayttan uzun parolalar ValueError verir; sınır değerleri kabul edilir."""
+    with pytest.raises(ValueError):
+        auth.create_user("kisa", "Kısa", "abc", [])
+    with pytest.raises(ValueError):
+        auth.create_user("uzun", "Uzun", "a" * 73, [])
+    # Neden: ş 2 bayttır; 37 karakter = 74 bayt, karakter sayısı değil bayt sayılmalı.
+    with pytest.raises(ValueError):
+        auth.create_user("bayt", "Bayt", "ş" * 37, [])
+    auth.create_user("sinir1", "Sınır", "abcd", [])
+    auth.create_user("sinir2", "Sınır", "a" * 72, [])
+
+
+def test_change_password_rejects_bad_password_length(auth):
+    """change_password da aynı uzunluk kurallarını uygular."""
+    admin_id = auth.list_users()[0]["id"]
+    with pytest.raises(ValueError):
+        auth.change_password(admin_id, "abc")
+    with pytest.raises(ValueError):
+        auth.change_password(admin_id, "a" * 73)
+    auth.change_password(admin_id, "yenisifre")
+    assert auth.authenticate("admin", "yenisifre") is not None
+
+
+def test_duplicate_role_names_are_ignored(auth):
+    """Aynı rol adı iki kez verilince tek bağ oluşur (hata yok)."""
+    user = auth.create_user("cift", "Çift", "secret1", ["viewer", "viewer"])
+    assert user["roles"] == ["viewer"]

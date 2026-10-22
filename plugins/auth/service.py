@@ -47,6 +47,18 @@ def split_permissions(permissions_text: str) -> list[str]:
     return permissions
 
 
+def check_password_rules(password: str) -> None:
+    """Parolanın uzunluk kurallarını denetler; kural bozuksa ValueError fırlatır.
+
+    Parametre: password - düz parola. En az 4 karakter olmalı.
+    Neden 72 bayt: bcrypt 72 bayttan fazlasını sessizce keser; bunu kullanıcıdan saklamayız.
+    """
+    if len(password) < 4:
+        raise ValueError("Parola en az 4 karakter olmalı")
+    if len(password.encode("utf-8")) > 72:
+        raise ValueError("Parola en fazla 72 bayt olabilir")
+
+
 class AuthService:
     """Kullanıcı, rol ve oturum işlerinin tek sahibi."""
 
@@ -90,7 +102,12 @@ class AuthService:
         Parametreler: session; user_id; role_names. Bilinmeyen rol adı ValueError verir.
         """
         roles = []
+        seen_names = []
         for role_name in role_names:
+            # Neden atlanır: aynı rol iki kez eklenirse tekrarlı bağ oluşur.
+            if role_name in seen_names:
+                continue
+            seen_names.append(role_name)
             role = session.scalar(select(Role).where(Role.name == role_name))
             if role is None:
                 raise ValueError(f"Rol bulunamadı: {role_name}")
@@ -195,11 +212,12 @@ class AuthService:
         """Yeni kullanıcı oluşturur.
 
         Parametreler: username, full_name, password (düz), role_names.
-        Dönüş: kullanıcı sözlüğü. Kullanıcı adı doluysa ya da boşsa ValueError.
+        Dönüş: kullanıcı sözlüğü. Kullanıcı adı doluysa/boşsa ya da parola kuralı bozuksa ValueError.
         """
         username = normalize_username(username)
         if not username:
             raise ValueError("Kullanıcı adı boş olamaz")
+        check_password_rules(password)
         with get_session() as session:
             existing = session.scalar(select(User).where(User.username == username))
             if existing is not None:
@@ -234,7 +252,8 @@ class AuthService:
             session.commit()
 
     def change_password(self, user_id: int, new_password: str) -> None:
-        """Kullanıcının parolasını değiştirir. Kullanıcı yoksa ValueError."""
+        """Kullanıcının parolasını değiştirir. Kullanıcı yoksa ya da parola kuralı bozuksa ValueError."""
+        check_password_rules(new_password)
         with get_session() as session:
             user = session.get(User, user_id)
             if user is None:
