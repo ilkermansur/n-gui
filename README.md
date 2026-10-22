@@ -35,7 +35,9 @@ python3 -m venv .venv
 ```
 
 Tarayıcıda `http://localhost:8080` adresini açın. Ayarlar `config.toml` dosyasındadır: başlık, port,
-`storage_secret`, veritabanı adresi, kapalı eklentiler, script klasörü ve ilk admin parolası.
+`storage_secret`, ortam (`development`/`production`), veritabanı adresi, kapalı eklentiler, script
+klasörü ve çalıştırma ortamı, parola ve giriş kilidi kuralları, Log saklama süresi. Bütün ayarlar:
+[docs/ADMINISTRATION_GUIDE.md, bölüm 3](docs/ADMINISTRATION_GUIDE.md#3-configtoml-başvurusu).
 
 Seçenekler:
 
@@ -47,9 +49,10 @@ Seçenekler:
 - Kullanıcı adı: `admin`
 - Parola: `config.toml` içindeki `[auth] initial_admin_password` değeri.
 
-Admin kullanıcısı ilk açılışta bu parolayla oluşturulur. **Varsayılan değeri (`admin`) canlıya
-çıkmadan önce mutlaka değiştirin.** İlk girişten sonra Ayarlar > Kullanıcılar > "Şifre sıfırla"
-ile admin parolasını da değiştirin. Ayrıca `[app] storage_secret` değerini rastgele, uzun bir metinle değiştirin.
+Admin kullanıcısı ilk açılışta bu parolayla oluşturulur. İlk girişten sonra sağ üstteki avatar >
+**Şifremi değiştir** ile parolanızı değiştirin. Canlıya çıkarken `[app] storage_secret` değerini en az
+32 karakterlik rastgele bir metin yapın ve `[app] environment = "production"` verin: bu modda
+varsayılan gizli anahtar ya da `admin` parolası kaldıysa uygulama açılmaz.
 
 ## Script ekleme (sihirbaz)
 
@@ -82,7 +85,12 @@ Yeni eklenti yazmak için `plugins/ornek_eklenti_sablonu/` şablonunu kopyalayı
 ## Testler
 
 ```bash
-.venv/bin/pytest
+.venv/bin/pip install -e ".[dev]"            # pytest + playwright
+.venv/bin/pytest                             # birim testleri
+NGUI_E2E=1 .venv/bin/pytest tests/e2e        # tarayıcıyla uçtan uca testler
 ```
 
-Testler bellek içi SQLite kullanır; `data/app.db` dosyanıza dokunmaz.
+Birim testleri bellek içi SQLite kullanır; uçtan uca testler uygulamayı geçici bir veritabanıyla ayrı
+bir süreçte başlatır. İkisi de `data/app.db` dosyanıza dokunmaz. Uçtan uca testler için Chromium
+gerekir (`.venv/bin/python -m playwright install chromium`, ya da `NGUI_CHROMIUM=/yol/chrome`).
+GitHub Actions her push'ta ikisini de çalıştırır (`.github/workflows/tests.yml`).

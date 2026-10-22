@@ -7,8 +7,8 @@ başka eklentilerin panelleri (örn. menu eklentisinin "Menü" paneli) otomatik 
 Sekme sırası: users, roles, menu, system, database; bilinmeyenler kayıt sırasıyla sona eklenir.
 
 ## Paneller (anahtar, izin)
-- `users` (`settings.users.manage`): kullanıcı tablosu, ekle/düzenle, şifre sıfırla, aktif/pasif
-- `roles` (`settings.roles.manage`): rol seç, izinleri onay kutularıyla düzenle, rol ekle
+- `users` (`settings.users.manage`): kullanıcı tablosu, ekle/düzenle, şifre sıfırla (en az `[auth] min_password_length`), aktif/pasif
+- `roles` (`settings.roles.manage`): rol seç, izinleri onay kutularıyla düzenle, rol ekle, rol sil (onaylı; admin ve atanmış roller silinmez)
 - `system` (`settings.system.view`): Python/NiceGUI/platform kartları, eklenti durumları, paket listesi
 - `database` (`settings.database.manage`): maskeli adres, bağlantıyı test et, `config.toml`'a kaydet (yeniden başlatma gerekir)
 

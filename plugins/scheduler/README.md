@@ -12,7 +12,10 @@ Yayınlanmış, etkin ve modu `scheduled` olan script'leri cron programına gör
 - İş anahtarı `script:<id>`; aynı iş aynı anda en fazla bir kez çalışır, kaçırılan çalışmalar
   birleştirilir ve en çok 60 sn gecikmeyle yine de çalıştırılır.
 - Saat dilimi: sunucunun yerel saat dilimi.
-- Geçersiz cron ifadesi loglanır ve o script atlanır.
+- Geçersiz cron ifadesi loglanır ve o script atlanır. Sihirbaz ifadeyi yayınlamadan önce
+  `validate_schedule(cron)` ile denetler (servis: `kernel.get_service("scheduler")`).
+- Zamanlayıcı uygulama sürecinin içindedir: uygulamayı aynı veritabanıyla birden çok kopya
+  çalıştırırsanız işler her kopyada ayrıca çalışır.
 
 ## Cron biçimi (5 alan: dakika saat gün ay haftanın-günü)
 - `*/5 * * * *` her 5 dakikada bir

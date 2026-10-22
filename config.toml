@@ -1,14 +1,19 @@
 # N-GUI ayar dosyası. Uygulama açılırken app/core/config.py tarafından okunur.
+# Her değişiklik uygulama yeniden başlatılınca geçerli olur.
+# Ayrıntılı açıklama: docs/ADMINISTRATION_GUIDE.md, bölüm 3.
 
 [app]
 # Tarayıcı sekmesinde ve üst çubukta görünen uygulama adı
 title = "N-GUI"
 # Web sunucusunun dinlediği port
 port = 8080
-# Oturum bilgisini imzalamak için kullanılan gizli anahtar (canlıda mutlaka değiştirin)
+# Oturum bilgisini imzalamak için kullanılan gizli anahtar (canlıda en az 32 karakter, rastgele)
 storage_secret = "degistir-beni"
 # Varsayılan arayüz dili (tr veya en)
 default_language = "tr"
+# "development" ya da "production". production'da varsayılan gizli anahtar veya
+# "admin" admin parolası varsa uygulama açılmaz.
+environment = "development"
 
 [database]
 # SQLAlchemy bağlantı adresi
@@ -21,7 +26,22 @@ disabled = ["ornek_eklenti_sablonu"]
 [scripts]
 # Script tanım dosyalarının bulunduğu klasör
 folder = "scripts"
+# Script'leri çalıştıracak Python yorumlayıcısı (boşsa uygulamanınki).
+# Örnek: script paketleri için ayrı bir sanal ortam -> "/opt/n-gui/script-venv/bin/python"
+python = ""
+# Script sürecine aktarılacak ortam değişkenleri; listede olmayanlar script'e geçmez.
+env_passthrough = ["PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR", "TEMP", "TMP"]
 
 [auth]
 # İlk açılışta oluşturulan admin kullanıcısının parolası (ilk girişten sonra değiştirin)
 initial_admin_password = "admin"
+# Parolanın en az karakter sayısı
+min_password_length = 8
+# Üst üste bu kadar hatalı girişte kullanıcı adı kilitlenir (0 = kilit yok)
+max_login_attempts = 5
+# Kilidin süresi (dakika)
+lockout_minutes = 15
+
+[audit]
+# Log ve script çalışma geçmişinin saklanacağı gün sayısı (0 = sonsuza dek)
+retention_days = 0

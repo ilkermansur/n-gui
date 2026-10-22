@@ -9,6 +9,7 @@ gönderilen değerleri tiplere çevirip doğrular. Doğrulama UI'dan bağımsız
   - `handle.get_raw_values()` - widget'lardaki ham değerler
   - `handle.submit()` - `(değerler, hatalar)` döner; hatalar alanın altında gösterilir, eskiler silinir
 - `convert_and_validate(fields, raw_values)` - `(değerler, hata_mesajları)`; mesajlar çevrilmiştir
+- `discard_uploaded_file(path)` - yüklenmiş dosyayı siler; yalnızca `data/uploads` içindekileri (script motoru çalıştırmadan sonra çağırır)
 
 ## Tip - widget
 `str` input, `text` textarea, `password` input(password), `int`/`float` number, `bool` switch,

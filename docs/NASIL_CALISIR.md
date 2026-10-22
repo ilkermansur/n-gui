@@ -86,17 +86,23 @@ süzmesi yapılmaz, `i18n` yoksa çeviri anahtarları görünür.
 6. **`kernel.events.publish("plugins.loaded", {})`**: `i18n` bu olayda çekirdeğin
    (`app/core/locales/`) ve yüklenen her eklentinin `locales/tr.json` ve `en.json` dosyalarını okur.
 7. **`create_all_tables()`**: eklentiler modellerini `setup` sırasında import ettiği için
-   `Base.metadata` artık tüm tabloları bilir. Var olmayan tablolar oluşturulur, var olanlara dokunulmaz.
+   `Base.metadata` artık tüm tabloları bilir. Var olmayan tablolar oluşturulur. Var olan tablolara
+   modelde olup tabloda olmayan sütunlar `add_missing_columns` ile eklenir (basit, yalnızca eklemeli göç).
 8. **`kernel.events.publish("database.ready", {})`**: tablolar hazır olduktan sonra hazır kayıtlar (seed) eklenir.
    - `auth`: `seed_defaults` ile `admin`, `operator` ve `viewer` rollerini ve `admin` kullanıcısını oluşturur
-     (parola: `[auth] initial_admin_password`; değer `"admin"` ise uyarı loglanır).
+     (parola: `[auth] initial_admin_password`; ilk admin için uzunluk kuralı uygulanmaz).
    - `menu`: `seed_defaults` ile `dashboard`, `operation`, `report`, `log` ve `settings` bölümlerini ekler.
      `register_all_section_permissions` her bölüm için `section.<key>.view` iznini kaydeder.
      `log` ve `settings` sistem bölümleridir: menü, sahibi eklenti (`audit_log`, `settings_core`)
      yüklü değilse bu bölümü göstermez. Eşleme `plugins/menu/service.py` içindeki
      `SYSTEM_SECTION_OWNERS` sözlüğündedir; yeni bir sistem bölümü eklenirse oraya da eklenmelidir.
    - `scheduler`: zamanlanmış işleri eşitler.
-9. Eklenti durumları loglanır ve **`ui.run(...)`** NiceGUI sunucusunu başlatır
+   - `audit_log` ve `script_engine`: `[audit] retention_days` doluysa eski Log ve çalışma
+     kayıtlarını siler (aynı temizlik `app.timer` ile günde bir tekrarlanır).
+9. Eklenti durumları loglanır ve **`enforce_security(kernel)`** güvenlik kontrolünü yapar:
+   varsayılan/kısa `storage_secret` ve `admin` parolasının hâlâ `"admin"` olması `Güvenlik:` uyarısı
+   olarak yazılır; `[app] environment = "production"` ise uygulama `sys.exit(1)` ile durur.
+10. **`ui.run(...)`** NiceGUI sunucusunu başlatır
    (`storage_secret` oturum çerezini imzalar, `reload=False`). `scheduler` eklentisi kendi
    zamanlayıcısını `app.on_startup` ile başlatır ve `app.on_shutdown` ile durdurur.
 
@@ -201,10 +207,14 @@ kullanıcının menüsündeki ilk sayfaya (`find_first_page_path`) yönlendirir.
 
 **6. Subprocess** (`service.execute` → `prepare_and_run` → `runner.run_script`):
 - Arayüz kilitlenmesin diye çağrı `await run.io_bound(service.execute, ...)` ile ayrı bir thread'de yapılır.
-- `prepare_and_run` kaydı ve dosyayı kontrol eder, dosyayı yeniden parse eder ve argümanları
-  `forms.convert_and_validate` ile tiplerine çevirip doğrular.
+- `prepare_and_run` kaydı ve dosyayı kontrol eder, dosyayı yeniden parse eder (değişmemişse
+  `parse_cache` önbelleğinden) ve argümanları `forms.convert_and_validate` ile tiplerine çevirip doğrular.
 - `run_script` argümanları geçici bir JSON dosyasına yazar ve şu komutu başlatır:
-  `python -I -B runner_shim.py <script> <args.json>`. Komut script'in klasöründe ve yeni bir süreç grubunda çalışır.
+  `<python> -I -B runner_shim.py <script> <args.json>`. `<python>` `[scripts] python` ayarıdır
+  (boşsa uygulamanın yorumlayıcısı). Komut script'in klasöründe, yeni bir süreç grubunda ve yalnızca
+  `[scripts] env_passthrough` listesindeki ortam değişkenleriyle çalışır.
+- Çalıştırma bitince (başarılı ya da değil) dosya alanlarına yüklenmiş dosyalar
+  `forms.discard_uploaded_file` ile silinir.
 - `runner_shim.py` script'i yükler, `run(**argümanlar)` çağırır ve dönen değeri stdout'a
   `__NGUI_RESULT__` ile başlayan tek bir satır olarak yazar. Hata olursa traceback stderr'e gider ve çıkış kodu 1 olur.
 - Süre (`timeout`) dolarsa süreç grubu `killpg` ile öldürülür (macOS/Linux).
@@ -226,10 +236,13 @@ kullanıcının menüsündeki ilk sayfaya (`find_first_page_path`) yönlendirir.
 
 **Modlara göre fark:**
 - `form`: form kartı → "Çalıştır" → sonuç kartı.
-- `live`: sayfa açılınca alanların varsayılan değerleriyle hemen çalışır, sonra her `refresh`
-  saniyede bir yeniden çalışır (`ui.timer`). **Yalnızca sayfa açılışındaki ilk çalıştırma
-  geçmişe ve Log'a yazılır. Periyodik yenilemeler yalnızca başarısız olursa kaydedilir**
-  (`execute(..., record_success=False)`); böylece Log dolmaz.
+- `live`: sayfa açılınca ve sonra her `refresh` saniyede bir (`ui.timer`) `service.run_live` çağrılır.
+  `run_live` sonucu **izleyiciler arasında paylaşır**: önbellekteki sonuç `refresh - 1` saniyeden
+  yeniyse script çalıştırılmaz; script başına bir kilit aynı anda tek çalıştırma yapılmasını sağlar.
+  Script alanların varsayılan değerleriyle çalışır. **Başarılı sonuç yalnızca pano bir süredir
+  izlenmiyorken** (önceki sonuç iki aralıktan eskiyse) geçmişe ve Log'a yazılır; diğer başarılı
+  yenilemeler `execute(..., record_success=False)` ile yazılmaz, başarısızlar her zaman yazılır.
+  "Son güncelleme" etiketi sonucun üretildiği saati gösterir.
 - `scheduled`: elle çalıştırma formu ve geçmiş çalıştırmalar tablosu. Satıra tıklanınca sonuç
   bir dialogda açılır. `scheduler` eklentisi kaydı `schedule` cron ifadesine göre `"scheduler"`
   kullanıcısı adına çalıştırır. Yalnızca varsayılanı olan alanlar verilir.
@@ -395,10 +408,11 @@ göstermek için istisna fırlatın: sonuç "Başarısız" olur ve traceback "Ha
 | Olay | Yayınlayan | Veri | Dinleyen |
 |---|---|---|---|
 | `plugins.loaded` | `main.py` | `{}` | `i18n` (çevirileri yükler) |
-| `database.ready` | `main.py` | `{}` | `auth`, `menu` (seed), `scheduler` (eşitleme) |
+| `database.ready` | `main.py` | `{}` | `auth`, `menu` (seed), `scheduler` (eşitleme), `audit_log` ve `script_engine` (saklama süresi temizliği) |
 | `auth.login` | `auth/login_page.py` | `{"username"}` | `audit_log` |
-| `auth.login_failed` | `auth/login_page.py` | `{"username"}` | `audit_log` (status error) |
+| `auth.login_failed` | `auth/login_page.py` | `{"username", "reason"?}`; hesap kilitliyse `reason: "locked"` | `audit_log` (status error) |
 | `auth.logout` | `auth/service.py` | `{"username"}` | `audit_log` |
+| `auth.password_changed` | `auth/password_dialog.py` | `{"username"}` | `audit_log` |
 | `script.finished` | `script_engine/service.py` (`execute`) | `{"username", "script_id", "success", "duration_ms", "error_text"}` | `audit_log` (`script.run`) |
 | `scripts.changed` | `script_engine/service.py` | `{"script_id", "change", "username"}`; `change`: `published`/`enabled`/`disabled`/`removed` | `audit_log`, `scheduler` |
 | `settings.changed` | `settings_core/changes.py`, `menu/settings_panel.py` | `{"username", "setting", "details"}`; `setting`: `users`/`roles`/`database`/`menu` | `audit_log` |
@@ -449,3 +463,5 @@ ile imzalanmış çerez üzerinden tarayıcıya bağlıdır ve sunucuda `.nicegu
 ## 8. Bilinen sınırlar
 
 - Script runner süreç grubunu `os.killpg` ile öldürür. Bu yöntem macOS/Linux içindir, Windows desteklenmez.
+- Giriş kilitleri, canlı mod önbelleği ve zamanlayıcı süreç içindedir; uygulama tek süreç olarak çalışmalıdır.
+- Göç yalnızca yeni sütun ekler; silme/yeniden adlandırma elle yapılır.

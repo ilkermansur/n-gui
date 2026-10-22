@@ -159,12 +159,12 @@ n-gui/
 
 | Modül | Genel API | Notlar |
 |---|---|---|
-| `kernel.py` | `Kernel(config)`; `register_service(ad, nesne)`, `get_service(ad)`; `register_permission(anahtar, açıklama_anahtarı)`, `list_permissions()`; `add_nav_provider(fn)`, `collect_nav_items(user)`; `register_settings_panel(panel)`, `list_settings_panels()`; alanlar: `config`, `events`, `plugin_status`, `loaded_plugin_folders`. Modül düzeyi: `set_kernel`, `get_kernel`, `current_kernel` | Uygulamada **tek** kernel vardır. `collect_nav_items` hata veren sağlayıcıyı loglayıp atlar |
-| `plugin.py` | `Plugin` (`plugin_id`, `name`, `version`, `requires`, `setup(kernel)`); `NavItem(key, label, icon, path, parent_key=None, order=100)`; `SettingsPanel(key, label_key, icon, permission, build_function)` | `NavItem.label` **çevrilmiş** metindir |
+| `kernel.py` | `Kernel(config)`; `register_service(ad, nesne)`, `get_service(ad)`; `register_permission(anahtar, açıklama_anahtarı)`, `list_permissions()`; `add_nav_provider(fn)`, `collect_nav_items(user)`; `register_settings_panel(panel)`, `list_settings_panels()`; `add_user_menu_item(item)`, `list_user_menu_items()`; alanlar: `config`, `events`, `plugin_status`, `loaded_plugin_folders`. Modül düzeyi: `set_kernel`, `get_kernel`, `current_kernel` | Uygulamada **tek** kernel vardır. `collect_nav_items` hata veren sağlayıcıyı loglayıp atlar |
+| `plugin.py` | `Plugin` (`plugin_id`, `name`, `version`, `requires`, `setup(kernel)`); `NavItem(key, label, icon, path, parent_key=None, order=100)`; `SettingsPanel(key, label_key, icon, permission, build_function)`; `UserMenuItem(label_key, icon, on_click)` | `NavItem.label` **çevrilmiş** metindir; `UserMenuItem` avatar menüsünde "Çıkış"ın üstünde görünür |
 | `loader.py` | `discover_plugins(klasör)`, `find_plugin_class(modül)`, `load_plugins(kernel, klasör, paket, only)` | Bkz. [bölüm 5](#5-eklenti-modeli) |
 | `events.py` | `EventBus.subscribe(ad, handler)`, `EventBus.publish(ad, data)` | Senkron; handler hatası loglanır, zincir sürer |
-| `config.py` | `AppConfig` dataclass; `load_config(yol)`; `save_config_value(yol, bölüm, anahtar, değer)` | Yazma satır bazlıdır, **yorumları korur** |
-| `db.py` | `Base`; `init_database(url)`; `get_session()`; `create_all_tables()` | `:memory:` için `StaticPool`; SQLite klasörü kendiliğinden açılır; `expire_on_commit=False` |
+| `config.py` | `AppConfig` dataclass; `load_config(yol)`; `save_config_value(yol, bölüm, anahtar, değer)`; `find_insecure_settings(config)` | Yazma satır bazlıdır, **yorumları korur**. Bütün anahtarlar: [ADMINISTRATION_GUIDE bölüm 3](ADMINISTRATION_GUIDE.md#3-configtoml-başvurusu) |
+| `db.py` | `Base`; `init_database(url)`; `get_session()`; `create_all_tables()`; `add_missing_columns(engine, metadata)` | `:memory:` için `StaticPool`; SQLite klasörü kendiliğinden açılır; `expire_on_commit=False`; `create_all_tables` eksik sütunları da ekler |
 | `access.py` | `check_page_access(kernel, izin_ya_da_None) -> bool` | `False` dönerse sayfa **hemen `return` etmelidir** |
 | `layout.py` | `create_shell_frame(kernel, başlık) -> ui.column`; `refresh_navigation()`; `get_current_user(kernel)` | Bkz. [bölüm 10](#10-sayfa-yaşam-döngüsü-ve-nicegui-bağlamı) |
 | `navigation.py` | `NavNode`; `nav_sort_key`; `build_navigation_tree(items)`; `find_first_page_path(nodes)`; `flatten_navigation_tree(nodes)` | Sahipsiz ve döngüdeki öğeler atılır |
@@ -254,12 +254,12 @@ Grafikte olmayan ilişkiler **isteğe bağlıdır**: `menu`, `script_engine`, `l
 | Ad | Sınıf | Sahip | Başlıca metotlar |
 |---|---|---|---|
 | `i18n` | `Translator` | `i18n` | `t`, `translate`, `get_language`, `set_language`, `pick`, `load_folder` |
-| `auth` | `AuthService` | `auth` | `authenticate`, `login_user`, `logout_current_user`, `current_user`, `has_permission`, `list_users`, `create_user`, `update_user`, `change_password`, `list_roles`, `create_role`, `set_role_permissions` |
+| `auth` | `AuthService` | `auth` | `authenticate`, `is_locked_out`, `login_user`, `logout_current_user`, `current_user`, `has_permission`, `list_users`, `create_user`, `update_user`, `change_password`, `change_own_password`, `has_default_admin_password`, `list_roles`, `create_role`, `set_role_permissions`, `delete_role` |
 | `menu` | `MenuService` | `menu` | `list_sections`, `create_section`, `update_section`, `delete_section`, `list_groups`, `create_group`, `delete_group`, `pick_label` |
-| `forms` | `FormsService` | `forms` | `build_form(fields) -> FormHandle`, `convert_and_validate(fields, raw)` |
-| `audit` | `AuditService` | `audit_log` | `write(...)`, `search(status, text, limit=500)` |
-| `scripts` | `ScriptService` | `script_engine` | `scan_folder`, `save_uploaded_file`, `parse`, `publish`, `set_enabled`, `remove`, `get_entry`, `list_entries`, `can_user_run`, `execute`, `list_runs`, `last_run` |
-| `scheduler` | `ScriptScheduler` | `scheduler` | `sync_jobs(entries)`, `run_job(script_id)` |
+| `forms` | `FormsService` | `forms` | `build_form(fields) -> FormHandle`, `convert_and_validate(fields, raw)`, `discard_uploaded_file(path)` |
+| `audit` | `AuditService` | `audit_log` | `write(...)`, `search(status, text, limit=2000, date_from="", date_to="")`, `purge_older_than(days)` |
+| `scripts` | `ScriptService` | `script_engine` | `scan_folder`, `save_uploaded_file`, `parse`, `publish`, `set_enabled`, `remove`, `get_entry`, `list_entries`, `can_user_run`, `find_roles_without_section_access`, `execute`, `run_live`, `list_runs`, `last_run`, `purge_runs_older_than` |
+| `scheduler` | `ScriptScheduler` | `scheduler` | `sync_jobs(entries)`, `run_job(script_id)`, `validate_schedule(cron)` |
 
 Her eklentinin `README.md` dosyası kendi servisinin imzalarını listeler.
 
@@ -270,8 +270,9 @@ Her eklentinin `README.md` dosyası kendi servisinin imzalarını listeler.
 | `plugins.loaded` | `main.py` | `{}` | `i18n` (çevirileri okur) |
 | `database.ready` | `main.py` | `{}` | `auth`, `menu` (seed), `scheduler` (eşitleme) |
 | `auth.login` | `auth/login_page.py` | `{"username"}` | `audit_log` |
-| `auth.login_failed` | `auth/login_page.py` | `{"username"}` | `audit_log` |
+| `auth.login_failed` | `auth/login_page.py` | `{"username", "reason"?}`; kilitliyken `reason: "locked"` | `audit_log` |
 | `auth.logout` | `auth/service.py` | `{"username"}` | `audit_log` |
+| `auth.password_changed` | `auth/password_dialog.py` | `{"username"}` (parola yok) | `audit_log` |
 | `script.finished` | `script_engine/service.py` | `{"username", "script_id", "success", "duration_ms", "error_text"}` | `audit_log` |
 | `scripts.changed` | `script_engine/service.py` | `{"script_id", "change", "username"}` | `audit_log`, `scheduler` |
 | `settings.changed` | `settings_core/changes.py`, `menu/settings_panel.py` | `{"username", "setting", "details"}`; `setting`: `users`/`roles`/`database`/`menu` | `audit_log` |
@@ -385,8 +386,15 @@ Tasarım notları:
 - Roller izinleri **virgülle ayrılmış tek metin** olarak tutar; ayrı izin tablosu bu ölçekte
   gereksiz karmaşıklık olurdu.
 - Tarihler sunucunun yerel saatiyle (`datetime.now`) yazılır.
-- **Göç (migration) yoktur.** `create_all_tables()` yalnızca eksik tabloları oluşturur. Var
-  olan bir tabloya sütun eklerseniz elle `ALTER TABLE` gerekir.
+- **Yalnızca eklemeli göç vardır.** `create_all_tables()` eksik tabloları oluşturur, ardından
+  `add_missing_columns` modelde olup tabloda olmayan sütunları `ALTER TABLE ... ADD COLUMN` ile
+  ekler. Sütun NULL olabilir eklenir; modelde sabit bir varsayılan varsa (`default="acik"`,
+  `default=3`) `DEFAULT` olarak yazılır ve eski satırlar onu alır. `datetime.now` gibi fonksiyon
+  varsayılanları SQL'e yazılamaz; eski satırlarda NULL kalır. Sütun silme, yeniden adlandırma ve tip
+  değiştirme yapılmaz; bunlar için elle göç adımı yazılmalıdır. Bu yüzden modele yeni sütun
+  eklerken ya NULL'a dayanıklı olun ya da sabit bir varsayılan verin.
+- **Saklama süresi:** `[audit] retention_days` doluysa `audit_entries` ve `script_runs` kayıtları
+  açılışta (`database.ready`) ve günde bir (`app.timer`) bu süreden eskiyse silinir.
 - Oturumlar kısa yaşar: her servis metodu `with get_session()` ile kendi oturumunu açar ve kapatır.
   `expire_on_commit=False` sayesinde dönen nesneler oturum kapandıktan sonra da okunabilir;
   yine de servisler dışarıya model nesnesi değil **düz sözlük** döndürür.
@@ -404,6 +412,27 @@ Tasarım notları:
   Önbellek yoktur; bu ölçekte doğruluk performanstan önemlidir.
 - Aynı depoda `language` ve `dark_mode` de durur (kullanıcı başına değil, **tarayıcı oturumu**
   başına).
+
+### Parola ve giriş politikası
+
+- Parolalar bcrypt ile özetlenir. Kural: en az `[auth] min_password_length` karakter, en fazla 72
+  bayt (`check_password_rules`). Tek istisna ilk admin'in oluşturulmasıdır
+  (`create_user(..., enforce_password_rules=False)`): geliştirmede varsayılan `admin` parolasıyla
+  girilebilsin diye.
+- **Giriş kilidi** `AuthService` içinde, bellekte tutulur: `failed_logins` sözlüğü kullanıcı adı
+  başına ardışık hata sayısını ve kilit bitişini saklar. `max_login_attempts` hatada ad
+  `lockout_minutes` kilitlenir; kilitliyken `authenticate` doğru parolayı da reddeder. Var olmayan
+  adlar da sayılır (kilit davranışı hangi adların var olduğunu ele vermesin). Sözlük 1000 adı
+  geçerse süresi dolmuş kayıtlar atılır. Saat `self.clock` ile verilir; testler sahte saat takar.
+  Bellekte olduğu için yeniden başlatmada sıfırlanır ve birden çok süreç arasında paylaşılmaz.
+- **Kendi parolasını değiştirme:** `change_own_password(user_id, mevcut, yeni)` mevcut parolayı
+  doğrular. Arayüzü `auth/password_dialog.py`'dir; auth eklentisi onu çekirdeğin kullanıcı menüsü
+  kayıt defterine (`kernel.add_user_menu_item`) ekler. Böylece çekirdek auth'u tanımadan menüde
+  "Şifremi değiştir" görünür.
+- **Canlı ortam koruması:** `main.enforce_security` açılışta (tablolar ve seed hazır olduktan sonra)
+  `find_insecure_settings` (varsayılan ya da 32 karakterden kısa `storage_secret`) ve
+  `auth.has_default_admin_password()` sonuçlarını toplar. Geliştirmede uyarı yazar;
+  `[app] environment = "production"` iken `sys.exit(1)` ile çıkar.
 
 ### İzin kontrolü
 
@@ -590,7 +619,9 @@ flowchart LR
 | Alanların temel kaynağı `run()` imzasıdır, YAML yalnızca zenginleştirir | Hiç docstring yazmayan biri bile form alır; YAML ile imza çelişemez (imzada olmayan girdi hatadır, `**kwargs` hariç) |
 | Parse hatası istisna değil `spec.error`'dur | Hatalı script listede mesajıyla görünür; admin ne olduğunu ekranda okur |
 | Her çalıştırma ayrı süreçtir (`subprocess`) | Bellek sızıntısı, sonsuz döngü, `sys.exit`, çökme ana süreci etkilemez; zaman aşımı uygulanabilir |
-| `python -I` (izole mod) | `PYTHONPATH`, kullanıcı site-packages ve çalışma klasörü `sys.path`'e eklenmez; script yalnızca uygulamanın ortamını görür |
+| `python -I` (izole mod) | `PYTHONPATH`, kullanıcı site-packages ve çalışma klasörü `sys.path`'e eklenmez |
+| Yorumlayıcı ayarlanabilir (`[scripts] python`) | Script paketleri ayrı bir sanal ortamda tutulabilir; uygulamanın bağımlılıklarıyla çakışmaz. `runner_shim.py` yalnızca standart kütüphane kullandığı için her Python 3'te çalışır |
+| Ortam değişkenleri süzülür (`[scripts] env_passthrough`, `build_child_environment`) | Uygulamanın ortamındaki gizli değerler script'lere sızmaz. Liste verilmezse (`None`, yalnızca doğrudan `run_script` çağrısında) eski davranış: bütün ortam |
 | `start_new_session=True` + `os.killpg` | Zaman aşımında script'in başlattığı torun süreçler de öldürülür |
 | Argümanlar geçici JSON dosyasıyla verilir | Komut satırı uzunluğu ve kaçış sorunları olmaz; parolalar süreç listesinde görünmez |
 | Sonuç stdout'ta işaretli **son** satırdır (`__NGUI_RESULT__`) | Script'in kendi `print`'leri serbesttir; ayrı kanal gerekmez |
@@ -598,7 +629,10 @@ flowchart LR
 | `RunResult` döner, istisna fırlatılmaz | Çağıran taraf (sayfa, zamanlayıcı) tek bir yol izler |
 | Script kimliği dosya adından türetilir (`make_script_id`) | Adres (`/script/<id>`), iş anahtarı ve kayıt anahtarı aynı, okunur ve güvenlidir |
 | Yayın kaydı (`ScriptEntry`) dosyadan ayrıdır | Dosya güncellenince yerleşim korunur; dosya silinince kayıt "Dosya bulunamadı" ile görünür ve panelden temizlenebilir |
-| Canlı modda yalnızca ilk ve başarısız çalıştırmalar kaydedilir | 15 saniyede bir yenilenen bir pano Log'u doldurmasın |
+| Canlı mod sonucu paylaşılır (`run_live`) | Pano açan her tarayıcı script'i ayrı çalıştırsaydı yük izleyici sayısıyla çarpılırdı. Sonuç `live_cache`'te `refresh - 1` saniye geçerlidir; script başına bir `threading.Lock` aynı anda tek çalıştırmayı garanti eder, bekleyenler çıkan sonucu alır |
+| Canlı modda başarılı sonuç yalnızca pano bir süredir izlenmiyorken kaydedilir | Önceki sonuç iki aralıktan eskiyse (kimse izlemiyordu) kaydedilir; sürekli izlenen pano Log'u doldurmaz. Başarısız sonuç her zaman kaydedilir |
+| Ayrıştırılan dosyalar önbellekte (`parse_cache`, anahtar: yol + `st_mtime_ns` + boyut) | Scriptler paneli ve zamanlayıcı her seferinde bütün klasörü okur; değişmeyen dosya yeniden ayrıştırılmaz. Çağırana `deepcopy` verilir, önbellek bozulmaz |
+| Yüklenen dosyalar çalıştırmadan sonra silinir | `data/uploads` büyümesin. Silmeyi dosyaları kaydeden `forms` yapar (`discard_uploaded_file`) ve yalnızca kendi klasöründekini siler (`realpath` kontrolü) |
 | Zamanlanmış işler varsayılan değerlerle çalışır | Zamanlayıcının soracağı kimse yoktur |
 
 ### Sonuç gösterimi (`result_view.py`)
@@ -806,6 +840,15 @@ def build_nav_items(self, user: dict | None) -> list[NavItem]:
                     path="/stok", parent_key="section:operation", order=50)]
 ```
 
+### Kullanıcı menüsüne satır eklemek
+
+```python
+from app.core.plugin import UserMenuItem
+kernel.add_user_menu_item(UserMenuItem("stok.my_settings", "tune", open_my_settings_dialog))
+```
+
+`on_click` parametresiz bir fonksiyondur (genellikle bir dialog açar). Örnek: `auth/password_dialog.py`.
+
 ### Yeni bir olay
 
 1. Adını `<alan>.<fiil>` biçiminde seçin, veri sözlüğünü belgelendirin (README + [bölüm 6](#olaylar)).
@@ -840,9 +883,14 @@ yalnızca bu sözleşmeyi bilir.
 ## 17. Test stratejisi
 
 ```bash
-.venv/bin/pytest            # hepsi
+.venv/bin/pip install -e ".[dev]"          # pytest + playwright
+.venv/bin/pytest                           # birim testleri (e2e atlanır)
 .venv/bin/pytest -q tests/test_script_runner.py
+NGUI_E2E=1 .venv/bin/pytest tests/e2e      # tarayıcıyla uçtan uca testler
 ```
+
+Uçtan uca testler için Chromium gerekir: `.venv/bin/python -m playwright install chromium`
+ya da hazır bir Chromium yolu: `NGUI_CHROMIUM=/yol/chrome`.
 
 - Testler **bellek içi SQLite** kullanır (`init_database("sqlite:///:memory:")`); `data/app.db`'ye dokunmaz.
 - Test edilenler, arayüzden bağımsız mantıktır: config okuma/yazma, olay yolu, loader
@@ -851,11 +899,16 @@ yalnızca bu sözleşmeyi bilir.
   aşımı, torun süreç), form doğrulama, zamanlayıcı eşitleme, tema/sonuç yardımcıları.
 - Bu yüzden mantık **NiceGUI'siz test edilebilir** fonksiyonlara ayrılır (ör. `display_value`,
   `html_lang_script`, `mask_database_url`). Yeni kodda da bu ayrımı koruyun.
-- Arayüz otomatik test edilmez. Büyük değişikliklerden sonra şu uçtan uca senaryo elle (ya da
-  Playwright ile) uygulanır: admin girişi → dil değiştirme → operator açma → operator ile
-  Ayarlar'ın görünmediğini kontrol → yeni bölüm → sihirbazla script yükleyip bu bölüme
-  yerleştirme → çalıştırma → Log kaydı → kaldırma ve menüden kalkması → bir eklentiyi kapatıp
-  uygulamanın çalıştığını görme → koyu tema ve telefon genişliği.
+- **Uçtan uca testler** (`tests/e2e`, `@pytest.mark.e2e`): `app_server` fixture'ı geçici klasörde
+  config, boş SQLite ve scripts klasörü hazırlayıp uygulamayı `python -m app.main --config ...` ile
+  ayrı süreçte başlatır (`NICEGUI_STORAGE_PATH` de geçicidir; geliştirici verisine dokunulmaz).
+  Senaryolar: admin'in kendi parolasını değiştirmesi, operatörün Ayarlar'ı görememesi, bölüm açma →
+  sihirbazla yükleme → çalıştırma → Log → kaldırma ve menünün anında güncellenmesi, giriş kilidi,
+  404 sayfası, canlı ortamda güvensiz ayarla açılmama. Testler aynı uygulamayı sırayla paylaşır.
+  Alt süreç ortamından `PYTEST_CURRENT_TEST` çıkarılır; yoksa NiceGUI test moduna geçer.
+- **CI:** `.github/workflows/tests.yml` her push/PR'de birim ve uçtan uca testleri çalıştırır.
+- Otomatik testlerin kapsamadığı görsel kontroller (koyu tema, telefon genişliği, canlı mod) büyük
+  arayüz değişikliklerinden sonra elle yapılır.
 
 ---
 
@@ -870,21 +923,24 @@ yalnızca bu sözleşmeyi bilir.
 | Her istekte kullanıcıyı DB'den okumak | Oturumda kullanıcı nesnesi | Pasif yapma ve rol değişikliği anında etkili; 5-50 kişide maliyet önemsiz |
 | Script ayrı süreçte | Aynı süreçte import + çağrı | Yalıtım, zaman aşımı, çökme güvenliği |
 | SQLite varsayılan | PostgreSQL zorunlu | Sıfır kurulum; adres değiştirerek büyütülebilir |
-| Göç aracı yok | Alembic | Basitlik; şema nadiren değişir. Bedeli: sütun eklemek elle yapılır |
+| Yalnızca eklemeli göç (`add_missing_columns`) | Alembic | Basitlik; en sık değişiklik (yeni sütun) kendiliğinden yapılır. Bedeli: silme/yeniden adlandırma elle |
 | Paneller kendini baştan çizer | İnce taneli durum güncellemesi | Daha az kod, daha az senkronizasyon hatası |
 | Yalnızca aktif sekmenin menüsü anında güncellenir | Bütün istemcilere yayın | Basitlik; diğer kullanıcılar bir sonraki sayfada görür |
-| Log 500 kayıtla sınırlı, saklama politikası yok | Sayfalama, otomatik temizlik | Basitlik; büyüyen kurulumlar için gelişim alanı |
+| Log araması 2000 kayıtla sınırlı, tablo istemci tarafında sayfalı | Sunucu tarafı sayfalama | Basitlik; tarih süzgeci ve saklama süresiyle birlikte bu ölçek için yeterli |
+| Giriş kilidi, canlı mod önbelleği ve zamanlayıcı süreç içinde | Redis / veritabanı | Ek altyapı gerektirmez; bedeli: uygulama tek süreç çalışmalıdır |
+| Canlı ortamda güvensiz ayarla açılmama | Yalnızca uyarı | Varsayılan gizli anahtar/parola ile yayına çıkmayı imkânsız kılar; geliştirmede kolaylık korunur |
 
 ---
 
 ## 19. Bilinen sınırlar ve gelişim alanları
 
 - Windows desteği yok (`os.killpg`).
-- Script'ler uygulamayla aynı işletim sistemi kullanıcısı ve Python ortamıyla çalışır; kum havuzu
-  yok. Ayrı kullanıcı/konteyner ile çalıştırma bir gelişim alanıdır.
-- Veritabanı göçü yok.
-- Kullanıcı/rol silme, hesap kilitleme, parola politikası, LDAP/AD yok.
-- Log için sayfalama, tarih süzgeci ve saklama politikası yok.
+- Script'ler uygulamayla aynı işletim sistemi kullanıcısıyla çalışır; kum havuzu yok (ortam
+  değişkenleri süzülür, ayrı Python ortamı verilebilir). Ayrı kullanıcı/konteyner ile çalıştırma bir gelişim alanıdır.
+- Göç yalnızca sütun ekler.
+- Kullanıcı silme, parola karmaşıklık kuralı, LDAP/AD yok.
+- Tek süreç: giriş kilitleri, canlı mod önbelleği ve zamanlayıcı süreç içindedir; yatay ölçekleme için
+  bunların paylaşılan bir depoya (veritabanı/Redis) taşınması gerekir.
 - Menü değişiklikleri diğer açık sekmelere canlı yayınlanmaz.
 - Dil düğmesi iki dil arasında geçiş yapar; üçüncü dil için seçim menüsü gerekir.
 - Uygulama alt yolda (`/ngui/`) yayınlanmayı desteklemez (Quasar dil paketi yolu kökten çözülür).

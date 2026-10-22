@@ -6,15 +6,11 @@ servisini ve izinleri kaydeder, /login sayfasını ekler ve "database.ready"
 olayında hazır rol/admin kayıtlarını oluşturur.
 """
 
-import logging
-
 from app.core.plugin import Plugin, UserMenuItem
 from plugins.auth import models  # noqa: F401  (tabloların Base'e kaydolması için)
 from plugins.auth import login_page  # noqa: F401  (import /login sayfasını kaydeder)
 from plugins.auth.password_dialog import open_change_password_dialog
 from plugins.auth.service import AuthService
-
-logger = logging.getLogger(__name__)
 
 
 class AuthPlugin(Plugin):
@@ -45,11 +41,6 @@ class AuthPlugin(Plugin):
 
         Parametre: data - olay verisi (kullanılmaz). Dönüş: yok.
         """
-        password = self.kernel.config.initial_admin_password
-        self.service.seed_defaults(password)
-        if self.service.has_default_admin_password():
-            logger.warning(
-                "Admin şifresi varsayılan değerde (\"admin\"); giriş yapıp kullanıcı menüsünden "
-                "\"Şifremi değiştir\" ile değiştirin. Canlı ortamda ([app] environment = \"production\") "
-                "uygulama bu durumda açılmaz."
-            )
+        # Neden burada uyarı yok: varsayılan parola kontrolünü main.py (enforce_security) yapar;
+        # canlı ortamda uygulamayı açmaz, geliştirmede uyarı yazar.
+        self.service.seed_defaults(self.kernel.config.initial_admin_password)

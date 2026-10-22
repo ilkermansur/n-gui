@@ -146,10 +146,17 @@ kullanılır. **Her değişiklik uygulama yeniden başlatılınca geçerli olur.
 | `[app]` | `port` | `8080` | Web sunucusunun dinlediği port |
 | `[app]` | `storage_secret` | `"degistir-beni"` | Oturum çerezini imzalayan gizli anahtar. **Canlıda uzun ve rastgele bir değer verin.** Değiştirirseniz herkesin oturumu kapanır |
 | `[app]` | `default_language` | `"tr"` | Henüz dil seçmemiş kullanıcının arayüz dili (`tr` ya da `en`) |
+| `[app]` | `environment` | `"development"` | `"production"` yapılırsa uygulama **güvensiz ayarlarla açılmayı reddeder**: varsayılan ya da 32 karakterden kısa `storage_secret`, ya da `admin` kullanıcısının parolası hâlâ `admin` ise konsola sebebini yazar ve çıkar (çıkış kodu 1). Geliştirmede aynı sorunlar yalnızca uyarı olarak yazılır |
 | `[database]` | `url` | `"sqlite:///data/app.db"` | SQLAlchemy bağlantı adresi (bkz. [bölüm 13](#13-veritabanı)) |
 | `[plugins]` | `disabled` | `[]` | Yüklenmeyecek eklentilerin klasör adları (bkz. [bölüm 14](#14-eklentileri-açma-ve-kapatma)) |
 | `[scripts]` | `folder` | `"scripts"` | Script dosyalarının durduğu klasör. Yoksa açılışta oluşturulur |
+| `[scripts]` | `python` | `""` | Script'leri çalıştıracak Python yorumlayıcısı. Boşsa uygulamanınki (`.venv`). Script paketlerini uygulamadan ayırmak için ayrı bir sanal ortam verin (bkz. [bölüm 9](#scriptlerin-ortamı)) |
+| `[scripts]` | `env_passthrough` | `["PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR", "TEMP", "TMP"]` | Script sürecine aktarılacak ortam değişkenleri. **Listede olmayan değişkenler script'e geçmez** (uygulamanın ortamındaki parolalar/anahtarlar sızmasın diye). Script'in ihtiyaç duyduğu değişkeni (ör. `ORACLE_HOME`) buraya ekleyin |
 | `[auth]` | `initial_admin_password` | `"admin"` | `admin` kullanıcısının **yalnızca ilk oluşturulurken** aldığı parola. Admin var olduktan sonra bu değeri değiştirmek parolayı değiştirmez |
+| `[auth]` | `min_password_length` | `8` | Parolanın en az karakter sayısı (yeni kullanıcı, şifre sıfırlama, şifremi değiştir) |
+| `[auth]` | `max_login_attempts` | `5` | Üst üste bu kadar hatalı girişte kullanıcı adı kilitlenir. `0` = kilit yok |
+| `[auth]` | `lockout_minutes` | `15` | Kilidin süresi (dakika) |
+| `[audit]` | `retention_days` | `0` | Log ve script çalışma geçmişinin saklanacağı gün. Bundan eski kayıtlar açılışta ve günde bir silinir. `0` = sonsuza dek saklanır |
 
 Örnek canlı ayar dosyası:
 
@@ -159,6 +166,7 @@ title = "Operasyon Paneli"
 port = 8080
 storage_secret = "q3J8...en-az-32-karakter-rastgele-metin..."
 default_language = "tr"
+environment = "production"
 
 [database]
 url = "sqlite:///data/app.db"
@@ -168,9 +176,17 @@ disabled = ["ornek_eklenti_sablonu"]
 
 [scripts]
 folder = "scripts"
+python = "/opt/n-gui/script-venv/bin/python"
+env_passthrough = ["PATH", "HOME", "LANG", "TZ", "TMPDIR"]
 
 [auth]
 initial_admin_password = "IlkGiris!2026"
+min_password_length = 10
+max_login_attempts = 5
+lockout_minutes = 15
+
+[audit]
+retention_days = 180
 ```
 
 Rastgele bir `storage_secret` üretmek için:
@@ -192,13 +208,21 @@ yorumlar korunur). Diğer değerleri elle düzenlersiniz.
 2. Tarayıcıda giriş ekranı açılır. Kullanıcı adı: `admin`, parola: `[auth] initial_admin_password`.
 3. Giriş yapınca menünüzdeki ilk sayfaya yönlendirilirsiniz.
 
-Parola varsayılan değerde (`admin`) ise uygulama her açılışta konsola şu uyarıyı yazar:
-`Admin şifresi varsayılan değerde ("admin"); config.toml içindeki [auth] initial_admin_password değerini değiştirin.`
+4. Sağ üstteki avatara tıklayıp **Şifremi değiştir** ile kendi parolanızı belirleyin.
+
+Admin parolası `admin` ya da `storage_secret` varsayılan değerdeyse uygulama her açılışta konsola
+`Güvenlik: ...` ile başlayan uyarılar yazar. `[app] environment = "production"` iken bu
+durumda **uygulama açılmaz**; önce sorunu giderin. İlk admin parolası `min_password_length`
+kuralına uymasa bile admin oluşturulur (ilk giriş yapılabilsin diye); parolayı hemen değiştirin.
 
 ### Canlıya çıkmadan önce
 
-- [ ] `[app] storage_secret` değerini rastgele, uzun bir metinle değiştirin.
-- [ ] Admin parolasını değiştirin: **Ayarlar > Kullanıcılar** > `admin` satırını seçin > **Şifre sıfırla**.
+- [ ] `[app] storage_secret` değerini rastgele, en az 32 karakterlik bir metinle değiştirin.
+- [ ] Admin parolasını değiştirin: avatar > **Şifremi değiştir**.
+- [ ] `[app] environment = "production"` yapın (güvensiz ayarla açılmayı engeller).
+- [ ] `[auth]` parola uzunluğu ve giriş kilidi ayarlarını kurum politikanıza göre verin.
+- [ ] `[audit] retention_days` ile Log saklama süresini belirleyin.
+- [ ] Script'lerin ihtiyaç duyduğu ortam değişkenlerini `[scripts] env_passthrough` listesine ekleyin.
 - [ ] Her kişiye kendi kullanıcısını açın; `admin` hesabını ortak kullanmayın.
 - [ ] Rollerin izinlerini gözden geçirin (bkz. [bölüm 7](#7-roller-ve-izinler)).
 - [ ] `scripts/` klasöründeki örnek script'leri isterseniz silin ya da yayınlamayın.
@@ -233,7 +257,7 @@ Parola varsayılan değerde (`admin`) ise uygulama her açılışta konsola şu 
   Telefon genişliğinde gizlenir.
 - **TR / EN:** Arayüz dilini değiştirir. Seçim tarayıcı oturumunuzda saklanır.
 - **☾ / ☀:** Koyu ve açık tema arasında geçiş yapar. Seçim saklanır.
-- **Kullanıcı menüsü (avatar):** Tıklayınca **Çıkış** seçeneği çıkar.
+- **Kullanıcı menüsü (avatar):** **Şifremi değiştir** (mevcut şifre + iki kez yeni şifre) ve **Çıkış**.
 
 Bir sayfaya izniniz yoksa "Bu sayfaya erişim izniniz yok" kartı görünür. Var olmayan bir adrese
 giderseniz "Sayfa bulunamadı" kartı ve **Ana sayfaya dön** düğmesi görünür.
@@ -256,13 +280,20 @@ düğmeleri kullanırsınız.
 
 Kurallar:
 
-- **Şifre** en az 4 karakter, en fazla 72 bayt olmalıdır (Türkçe harfler 2 bayt sayılır).
-  Şifreler bcrypt ile özetlenerek saklanır; kimse düz halini göremez.
+- **Şifre** en az `[auth] min_password_length` (varsayılan 8) karakter, en fazla 72 bayt olmalıdır
+  (Türkçe harfler 2 bayt sayılır). Şifreler bcrypt ile özetlenerek saklanır; kimse düz halini göremez.
+- Her kullanıcı **kendi şifresini** avatar > **Şifremi değiştir** ile değiştirebilir; mevcut şifresini
+  bilmesi gerekir. Admin'in **Şifre sıfırla** düğmesi ise mevcut şifreyi sormaz (unutulan şifre için).
+- **Giriş kilidi:** bir kullanıcı adıyla üst üste `max_login_attempts` (varsayılan 5) kez hatalı
+  giriş yapılırsa o ad `lockout_minutes` (varsayılan 15) dakika kilitlenir; doğru şifre de kabul
+  edilmez ve giriş ekranı kilidi söyler. Kilit süre dolunca kendiliğinden kalkar; uygulamayı yeniden
+  başlatmak da kilitleri sıfırlar. Var olmayan kullanıcı adları da aynı şekilde sayılır.
 - **Kendi hesabınızı pasif yapamazsınız** (sistemin dışında kalmayasınız diye).
 - **Kullanıcı silme yoktur.** Ayrılan kişiyi pasif yapın; geçmiş Log kayıtları onun adıyla kalır.
 - Bir kullanıcının rolleri değişince yeni izinler **o kullanıcının bir sonraki sayfa açılışında**
   geçerli olur. Kendi rollerinizi değiştirirseniz sol menünüz hemen güncellenir.
-- Bütün kullanıcı işlemleri Log'a `settings.changed` / `users` olarak yazılır. Şifreler asla Log'a yazılmaz.
+- Bütün kullanıcı işlemleri Log'a `settings.changed` / `users`, kendi şifresini değiştirme
+  `auth.password_changed` olarak yazılır. Şifreler asla Log'a yazılmaz.
 
 ---
 
@@ -282,10 +313,12 @@ Kurallar:
 1. **Rol** listesinden bir rol seçin. Sistemdeki bütün izinler onay kutusu olarak, açıklamalarıyla listelenir.
 2. Kutuları işaretleyin/kaldırın ve **Kaydet** deyin.
 3. Yeni rol için **Rol ekle** → ad → **Kaydet**. Yeni rol boş izinle başlar.
+4. Rolü silmek için rolü seçip **Rolü sil** deyin (onay ister). `admin` rolü ve en az bir
+   kullanıcıya atanmış rol silinemez; önce rolü kullanıcılardan kaldırın.
 
 `*` iznine sahip bir rol seçildiğinde bir uyarı görünür: bu rol, kutular işaretli olmasa da her
 şeyi yapabilir. Kapalı bir eklentinin izni kutularda görünmez ama rolden silinmez; eklenti
-yeniden açılınca izin geri gelir. Rol silme yoktur; kullanmadığınız rolü kimseye vermeyin.
+yeniden açılınca izin geri gelir.
 
 ### Tüm izinler
 
@@ -336,6 +369,9 @@ Yani bir operatörün "Ürün B" altındaki bir script'i menüde görmesi için 
 listesinde `operator` olmalı (ya da liste boş olmalı), hem de `operator` rolünde
 `section.urun_b.view` izni bulunmalıdır. Rolü uygun olan kullanıcı, bölümü göremese bile
 script'in adresini (`/script/<kimlik>`) doğrudan açarak çalıştırabilir.
+
+Script sihirbazı bu durumu yayınlamadan önce gösterir: seçtiğiniz bölümü göremeyen roller için
+"Uyarı: ... rolü bu script'i çalıştırabilir ama ... bölümünü göremez" mesajı çıkar.
 
 ---
 
@@ -458,13 +494,35 @@ Script yazarken dikkat edilecekler:
 - `print(...)` çıktıları sonucun altındaki katlanır **Çıktı** bölümünde görünür (en fazla 20.000 karakter).
 - Hata göstermek için **istisna fırlatın** (`raise ValueError("...")`). Sonuç "Hatalı" olur ve
   traceback kırmızı **Hata** kartında görünür.
-- Script **uygulamayla aynı Python ortamında** (`.venv`) çalışır. Script'in ihtiyaç duyduğu
-  paketleri bu ortama kurun: `.venv/bin/pip install <paket>`.
+- Script varsayılan olarak **uygulamayla aynı Python ortamında** (`.venv`) çalışır; ayrı bir ortam
+  verilebilir (aşağıda "Script'lerin ortamı").
+- Script'e yalnızca `[scripts] env_passthrough` listesindeki ortam değişkenleri geçer.
 - Script'in çalışma klasörü script'in kendi klasörüdür (`scripts/`).
 - Uzun süren işler için docstring'de `timeout` verin (varsayılan 60 sn). Süre dolunca script
   ve başlattığı bütün alt süreçler sonlandırılır.
 - Docstring'deki ilk paragraf sayfada başlığın altında görünür. Boş satırla paragraf ayırabilir,
   `` `kod` `` yazımı kullanabilirsiniz.
+
+### Script'lerin ortamı
+
+Script'ler her çalıştırmada ayrı bir Python sürecinde, uygulamanın işletim sistemi kullanıcısıyla çalışır.
+
+- **Paketler:** varsayılan olarak uygulamanın `.venv` ortamı kullanılır
+  (`.venv/bin/pip install <paket>`). Script paketlerinin uygulamanın paketleriyle çakışmaması için
+  ayrı bir sanal ortam önerilir:
+
+  ```bash
+  python3 -m venv /opt/n-gui/script-venv
+  /opt/n-gui/script-venv/bin/pip install requests paramiko   # script'lerin ihtiyaçları
+  ```
+
+  ve `config.toml`: `[scripts] python = "/opt/n-gui/script-venv/bin/python"`. Ayrı ortam yalnızca
+  Python standart kütüphanesine ihtiyaç duyar; N-GUI'nin kendisini oraya kurmanız gerekmez.
+- **Ortam değişkenleri:** uygulamanın ortamındaki değişkenler (veritabanı parolası, API anahtarı gibi)
+  script'e **geçmez**; yalnızca `[scripts] env_passthrough` listesindekiler geçer.
+- **Yetki:** script'ler uygulamayla aynı işletim sistemi kullanıcısı adına çalışır. Bu kullanıcının
+  dosya ve ağ yetkilerini sınırlayın; `scripts.manage` iznini yalnızca güvendiğiniz kişilere verin
+  (bu izin, sunucuda kod çalıştırma yetkisi demektir).
 
 ### Script yüklemek: sihirbaz
 
@@ -504,7 +562,7 @@ görünür ve ilerleyemezsiniz.
 | Mod | Sayfa | Kim çalıştırır | Log'a ne yazılır |
 |---|---|---|---|
 | **Form** | Form → **Çalıştır** → sonuç kartı | Kullanıcı | Her çalıştırma |
-| **Canlı** | Form yok. Sayfa açılınca alanların varsayılanlarıyla çalışır, sonra her *yenileme aralığı* saniyede bir tekrar çalışır | Sayfayı açık tutan her tarayıcı | Sayfa açılışındaki ilk çalıştırma ve **yalnızca başarısız** yenilemeler (Log dolmasın diye) |
+| **Canlı** | Form yok. Sayfa açılınca alanların varsayılanlarıyla çalışır, sonra her *yenileme aralığı* saniyede bir yenilenir | Sunucu, **yenileme aralığı başına bir kez**; sonucu panoyu açık tutan herkes paylaşır (20 kişi açsa da script bir kez çalışır) | Pano bir süredir izlenmiyorken yapılan çalıştırma ve **yalnızca başarısız** yenilemeler (Log dolmasın diye) |
 | **Zamanlanmış** | Elle çalıştırma formu + **Geçmiş çalıştırmalar** tablosu (son 50). Satıra tıklayınca sonuç açılır | Zamanlayıcı (`scheduler` kullanıcısı adına) ve isteyen kullanıcı | Her çalıştırma |
 
 Zamanlanmış çalışmalar alanların **varsayılan değerleriyle** yapılır; varsayılanı olmayan alan
@@ -519,8 +577,12 @@ Cron biçimi 5 alandır: `dakika saat gün ay haftanın-günü`. Sunucunun yerel
 | `30 17 * * 1-5` | Hafta içi 17:30 |
 | `0 0 1 * *` | Her ayın ilk günü gece yarısı |
 
-Geçersiz cron ifadesi konsola loglanır ve o script zamanlanmaz. Aynı script'in bir önceki
-zamanlanmış çalışması bitmeden yenisi başlamaz.
+Sihirbaz cron ifadesini yayınlamadan önce denetler; geçersizse uyarı verir ve yayınlamaz.
+Yine de geçersiz kalmış bir ifade (ör. veritabanı elle değiştirilmişse) konsola loglanır ve o
+script zamanlanmaz. Aynı script'in bir önceki zamanlanmış çalışması bitmeden yenisi başlamaz.
+
+Zamanlayıcı uygulama sürecinin içindedir. **Uygulamayı aynı veritabanıyla birden çok kopya
+olarak çalıştırmayın**; her kopya zamanlanmış işleri ayrıca çalıştırır.
 
 ### Script listesi
 
@@ -564,7 +626,8 @@ Bütün script işlemleri Log'a `scripts.changed` olarak yazılır (`published`,
    - hata varsa kırmızı **Hata** kartı.
 
 Dosya alanı olan formlarda yüklenen dosya sunucuda `data/uploads/` klasörüne kaydedilir ve
-script'e dosyanın yolu verilir.
+script'e dosyanın yolu verilir. **Dosya, çalıştırma bitince silinir**; script'in dosyayı saklaması
+gerekiyorsa kendisi başka bir yere kopyalamalıdır.
 
 Bir script'i çalıştırma yetkiniz yoksa sayfası "Bu sayfaya erişim izniniz yok" mesajını gösterir.
 Devre dışı bırakılmış ya da kaldırılmış bir script'in adresi "Script bulunamadı ya da devre dışı" gösterir.
@@ -578,19 +641,26 @@ Devre dışı bırakılmış ya da kaldırılmış bir script'in adresi "Script 
 | İşlem (`action`) | Ne zaman | Hedef | Detay |
 |---|---|---|---|
 | `auth.login` | Başarılı giriş | — | — |
-| `auth.login_failed` | Hatalı giriş (durum: ERROR) | — | Kullanıcı sütununda denenen ad |
+| `auth.login_failed` | Hatalı giriş (durum: ERROR) | — | Kullanıcı sütununda denenen ad; hesap kilitliyken `locked` |
+| `auth.password_changed` | Kullanıcı kendi şifresini değiştirdi | — | — |
 | `auth.logout` | Çıkış | — | — |
 | `script.run` | Script çalıştırması | script kimliği | Hata metni (varsa), süre |
 | `scripts.changed` | Yayın, etkinleştirme, devre dışı bırakma, kaldırma | script kimliği | `published` / `enabled` / `disabled` / `removed` |
 | `settings.changed` | Kullanıcı, rol, menü ve veritabanı ayarı değişiklikleri | `users` / `roles` / `menu` / `database` | Kısa açıklama (şifre içermez) |
 
-Süzme: **Durum** (Hepsi / OK / ERROR) ve **Ara** (kullanıcı, işlem, hedef ve detayda geçen metin).
-**Yenile** düğmesi süzgeci uygular. Sayfa **en fazla 500 kaydı** gösterir; daha eskileri için süzgeci daraltın.
+Süzme: **Durum** (Hepsi / OK / ERROR), **Ara** (kullanıcı, işlem, hedef ve detayda geçen metin;
+Enter ile de uygulanır) ve **Başlangıç / Bitiş tarihi** (iki gün de dahil). **Yenile** düğmesi
+süzgeci uygular. Tablo 50'şer satırlık sayfalara bölünür (alttaki okları ve "Sayfa başına kayıt"
+seçicisini kullanın). Bir aramada **en fazla 2000 kayıt** gelir; sınıra ulaşılırsa tablonun üstünde
+uyarı görünür, tarih aralığını daraltın.
 
 Zaman damgaları sunucunun yerel saatindedir.
 
-**Saklama:** Log kayıtları kendiliğinden silinmez. Veritabanı büyürse eski kayıtları elle
-temizleyebilirsiniz (önce yedek alın):
+**Saklama:** `[audit] retention_days` (varsayılan `0` = sonsuza dek) doluysa, bu günden eski Log
+kayıtları ve script çalışma geçmişi açılışta ve günde bir kez kendiliğinden silinir. Silinen kayıt
+sayısı konsola yazılır.
+
+Elle temizlemek isterseniz (önce yedek alın; `sqlite3` komut satırı aracı gerekir):
 
 ```bash
 sqlite3 data/app.db "DELETE FROM audit_entries WHERE created_at < date('now', '-180 days');"
@@ -713,9 +783,10 @@ git pull
 sudo systemctl start n-gui
 ```
 
-Açılışta eksik tablolar kendiliğinden oluşturulur. **Var olan tablolara yeni sütun eklenmez**
-(otomatik veritabanı göçü yoktur). Bir güncelleme var olan bir tabloyu değiştiriyorsa sürüm
-notlarındaki elle yapılacak adımları izleyin.
+Açılışta eksik tablolar oluşturulur ve **var olan tablolara yeni sürümde eklenen sütunlar
+kendiliğinden eklenir** (konsolda `Veritabanına sütun eklendi: tablo.sütun`). Eski satırlar yeni
+sütunun varsayılan değerini alır. Sütun silme, yeniden adlandırma ve tip değiştirme kendiliğinden
+yapılmaz; böyle bir güncellemede sürüm notlarındaki elle yapılacak adımları izleyin.
 
 ---
 
@@ -730,10 +801,14 @@ notlarındaki elle yapılacak adımları izleyin.
 | Script menüde görünmüyor | Devre dışı / atanmamış / kullanıcının rolü listede yok / bölümü görme izni yok | Ayarlar > Scriptler'deki durum ve [bölüm 7](#scriptleri-kim-görür-kim-çalıştırır) |
 | Script listede "hatalı" | Söz dizimi, YAML ya da `run()` eksik | Satırdaki mesajı okuyun, dosyayı düzeltip **Yeniden tara** |
 | "Zaman aşımı: N saniye içinde bitmedi" | Script `timeout` süresini aştı | Sihirbazda zaman aşımını artırın |
-| `ModuleNotFoundError` script hatası | Script'in paketi `.venv`'de yok | `.venv/bin/pip install <paket>` |
+| `ModuleNotFoundError` script hatası | Script'in paketi script'leri çalıştıran ortamda yok | `.venv/bin/pip install <paket>` ya da `[scripts] python` ile verdiğiniz ortama kurun |
 | Zamanlanmış script hiç çalışmıyor | `scheduler` kapalı, mod "Zamanlanmış" değil, cron boş/geçersiz, script devre dışı ya da atanmamış | Konsol logunda `Geçersiz cron ifadesi` satırını arayın |
 | Ayarlar > Sistem'de `failed: ...` | Eklenti yüklenirken hata verdi | Konsol logundaki traceback'e bakın |
-| Log'da `auth.login_failed` birikmesi | Hatalı/kaba kuvvet giriş denemeleri | Kaynağı ağ tarafında kısıtlayın; uygulamada hesap kilitleme yoktur |
+| Log'da `auth.login_failed` birikmesi | Hatalı/kaba kuvvet giriş denemeleri | Kullanıcı adları `max_login_attempts` sonrası kendiliğinden kilitlenir; kaynağı ayrıca ağ tarafında kısıtlayın |
+| "Çok fazla hatalı deneme. Hesap N dakika kilitlendi." | Üst üste hatalı giriş | Süre dolunca tekrar deneyin. Acil durumda uygulamayı yeniden başlatmak kilitleri sıfırlar |
+| Uygulama açılmıyor, konsolda `Canlı ortamda güvenlik sorunları var` | `environment = "production"` ve varsayılan `storage_secret` ya da `admin` parolası | Konsoldaki `Güvenlik:` satırlarındaki sorunu giderin. Admin parolası için uygulamayı geçici olarak `development` ile açıp şifreyi değiştirin |
+| Script `KeyError`/eksik ortam değişkeni hatası veriyor | Değişken `env_passthrough` listesinde değil | `[scripts] env_passthrough` listesine ekleyin |
+| Sihirbazda bölüm uyarısı | Seçilen roller bölümü göremiyor | Ayarlar > Roller'den `section.<anahtar>.view` verin ya da script'i başka bölüme koyun |
 
 Uygulamanın kendi logları standart çıktıya (konsol / `journalctl`) yazılır.
 
@@ -742,11 +817,15 @@ Uygulamanın kendi logları standart çıktıya (konsol / `journalctl`) yazılı
 ## 17. Bilinen sınırlar
 
 - Windows sunucu desteklenmez (script sonlandırma `os.killpg` kullanır).
-- Kullanıcı ve rol silme yoktur (pasif yapın / kullanmayın).
-- Hesap kilitleme, parola karmaşıklık kuralı ve LDAP/AD girişi yoktur. Giriş `auth` eklentisinde
-  olduğu için ileride bir LDAP eklentisiyle değiştirilebilir.
-- Script'ler uygulamayla aynı işletim sistemi kullanıcısı ve Python ortamı ile çalışır; ayrı bir
-  kum havuzu (sandbox) yoktur. Script yükleme yetkisini (`scripts.manage`) yalnızca güvendiğiniz kişilere verin.
-- Log'da en fazla 500 kayıt gösterilir ve kayıtlar kendiliğinden silinmez.
-- Otomatik veritabanı göçü yoktur.
+- Kullanıcı silme yoktur (pasif yapın). Rol yalnızca kimseye atanmamışsa silinir.
+- Parola karmaşıklık kuralı (yalnızca uzunluk vardır) ve LDAP/AD girişi yoktur. Giriş `auth`
+  eklentisinde olduğu için ileride bir LDAP eklentisiyle değiştirilebilir. Giriş kilitleri bellekte
+  tutulur; uygulama yeniden başlayınca sıfırlanır.
+- Script'ler uygulamayla aynı işletim sistemi kullanıcısı adına çalışır; ayrı bir kum havuzu (sandbox)
+  yoktur. Ortam değişkenleri süzülür ve ayrı bir Python ortamı verilebilir, ama dosya ve ağ yetkisi
+  işletim sistemi kullanıcısına bağlıdır. Script yükleme yetkisini (`scripts.manage`) yalnızca güvendiğiniz kişilere verin.
+- Bir Log aramasında en fazla 2000 kayıt gelir.
+- Veritabanı göçü yalnızca yeni sütun ekler.
+- Uygulama tek süreç olarak çalışmak üzere tasarlanmıştır (zamanlayıcı, giriş kilidi ve canlı mod
+  önbelleği süreç içindedir).
 - Menü değişiklikleri diğer kullanıcılara bir sonraki sayfa açılışında yansır.
