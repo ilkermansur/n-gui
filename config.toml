@@ -16,7 +16,7 @@ url = "sqlite:///data/app.db"
 
 [plugins]
 # Yüklenmeyecek eklentilerin klasör adları
-disabled = []
+disabled = ["ornek_eklenti_sablonu"]
 
 [scripts]
 # Script tanım dosyalarının bulunduğu klasör

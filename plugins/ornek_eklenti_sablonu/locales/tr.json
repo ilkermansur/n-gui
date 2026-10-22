@@ -1,0 +1,8 @@
+{
+  "ornek_eklenti.menu": "Örnek Eklenti",
+  "ornek_eklenti.title": "Örnek Eklenti Sayfası",
+  "ornek_eklenti.description": "Bu sayfa ornek_eklenti_sablonu eklentisinden geliyor. Yeni bir eklenti yazarken bu klasörü kopyalayın.",
+  "ornek_eklenti.stat_plugins": "Bulunan eklenti",
+  "ornek_eklenti.stat_permissions": "Kayıtlı izin",
+  "ornek_eklenti.permission.view": "Örnek eklenti sayfasını görme"
+}

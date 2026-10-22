@@ -1,0 +1,8 @@
+{
+  "ornek_eklenti.menu": "Example Plugin",
+  "ornek_eklenti.title": "Example Plugin Page",
+  "ornek_eklenti.description": "This page comes from the ornek_eklenti_sablonu plugin. Copy this folder when writing a new plugin.",
+  "ornek_eklenti.stat_plugins": "Plugins found",
+  "ornek_eklenti.stat_permissions": "Registered permissions",
+  "ornek_eklenti.permission.view": "View the example plugin page"
+}
