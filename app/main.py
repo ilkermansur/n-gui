@@ -19,7 +19,7 @@ from app.core.layout import create_shell_frame, get_current_user
 from app.core.loader import load_plugins
 from app.core.navigation import build_navigation_tree, find_first_page_path
 from app.core.text import t
-from app.core.widgets import empty_state
+from app.core.widgets import empty_state, page_card
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -68,6 +68,26 @@ def home_page() -> None:
         empty_state(t("shell.empty"))
 
 
+def not_found_page() -> None:
+    """Bulunamayan adresler için kabuk içinde "sayfa bulunamadı" kartı çizer.
+
+    Kim çağırır: NiceGUI, eşleşen bir sayfa olmadığında (ui.run(root=...) ile bağlanır).
+    Örnek: kapalı bir eklentinin sayfası (/log) ya da yanlış yazılmış bir adres.
+    """
+    kernel = get_kernel()
+    if not check_page_access(kernel, None):
+        return
+
+    content = create_shell_frame(kernel, t("shell.not_found"))
+    with content:
+        with page_card().classes("items-center py-12"):
+            ui.icon("search_off", size="48px").classes("text-slate-300 dark:text-slate-600")
+            ui.label(t("shell.not_found")).classes(
+                "text-lg font-semibold text-slate-700 dark:text-slate-200"
+            )
+            ui.button(t("shell.go_home"), icon="home", on_click=lambda: ui.navigate.to("/")).props("flat")
+
+
 def main() -> None:
     """Uygulamayı sırasıyla kurar ve web sunucusunu başlatır. Dönüş: yok."""
     logging.basicConfig(level=logging.INFO)
@@ -89,7 +109,10 @@ def main() -> None:
     for plugin_id, status in kernel.plugin_status.items():
         logging.info("Eklenti %s: %s", plugin_id, status)
 
+    # Neden root: NiceGUI eşleşmeyen her adreste root fonksiyonunu çağırır; böylece
+    # İngilizce varsayılan 404 sayfası yerine kabuk içinde çevrilmiş bir sayfa görünür.
     ui.run(
+        root=not_found_page,
         title=config.app_title,
         port=config.port,
         storage_secret=config.storage_secret,

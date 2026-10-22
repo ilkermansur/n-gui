@@ -4,5 +4,10 @@
   "shell.dark_mode": "Dark mode",
   "shell.logout": "Logout",
   "shell.forbidden": "You do not have permission to view this page.",
-  "shell.empty": "There is no page to show yet."
+  "shell.empty": "There is no page to show yet.",
+  "shell.light_mode": "Light mode",
+  "shell.not_found": "Page not found.",
+  "shell.go_home": "Go to home page",
+  "shell.yes": "Yes",
+  "shell.no": "No"
 }

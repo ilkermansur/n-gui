@@ -8,6 +8,7 @@ apply_theme() çağrılır (create_shell_frame bunu kendisi yapar).
 
 import json
 
+from nicegui import __version__ as nicegui_version
 from nicegui import app, ui
 
 from app.core import kernel as kernel_module
@@ -73,7 +74,13 @@ NAV_ITEM_ACTIVE_CLASSES = (
     "bg-indigo-50 text-[" + PRIMARY_COLOR + "] dark:bg-slate-700 dark:text-indigo-300"
 )
 # Katlanabilir menü grubunun başlık satırı (Quasar q-item'a header-class olarak verilir).
-NAV_GROUP_HEADER_CLASSES = "rounded-lg px-3 text-slate-600 dark:text-slate-300"
+# Neden py-2: yüksekliği ve iç boşluğu düz menü satırlarıyla (NAV_ITEM_CLASSES) aynı olsun.
+NAV_GROUP_HEADER_CLASSES = (
+    "rounded-lg px-3 py-2 text-slate-600 dark:text-slate-300 "
+    "hover:bg-slate-100 dark:hover:bg-slate-700"
+)
+# Menü grubu ui.expansion'ına verilen sınıf; EXTRA_CSS bu sınıfı hedefler.
+NAV_GROUP_CLASS = "nav-group"
 
 # Durum rozetleri (pill): renk adı -> Tailwind sınıfları.
 BADGE_BASE_CLASSES = "px-2.5 py-0.5 rounded-full text-xs font-medium"
@@ -83,6 +90,36 @@ BADGE_COLOR_CLASSES = {
     "red": "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200",
     "gray": "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
 }
+
+
+# Quasar bileşenlerinin bu dosyadan yönetilemeyen kısımları için ek CSS.
+# Neden: Quasar koyu temada tablo, menü ve dialog zeminini #1d1d1d yapar; kartlarımız
+# slate-800 olduğu için aynı tona çekilir. Menü grubunun ikon bölümü Quasar'da 56px
+# genişliktedir; düz menü satırlarıyla hizalı olsun diye daraltılır.
+EXTRA_CSS = (
+    ".body--dark .q-table__card, .body--dark .q-menu, .body--dark .q-dialog .q-card "
+    "{ background-color: #1E293B; }\n"
+    "." + NAV_GROUP_CLASS + " .q-item__section--avatar { min-width: 0; padding-right: 12px; }\n"
+    "." + NAV_GROUP_CLASS + " .q-item__section--avatar .q-icon { font-size: 20px; }\n"
+    "." + NAV_GROUP_CLASS + " .q-item { min-height: 0; }\n"
+    # NiceGUI expansion içeriğine kendi boşluğunu verir; menüde satırlar arası boşluk 4px kalsın.
+    "." + NAV_GROUP_CLASS + " .nicegui-expansion-content { padding: 4px 0 0 0; gap: 4px; }\n"
+    # Koyu temada birincil mavi koyu zeminde okunmaz; düz düğmeler açık indigoya geçer.
+    # Neden değişken: Quasar'ın .text-primary kuralı !important'tır ve CSS katmanında durur,
+    # doğrudan renk yazmak onu ezemez. Rengi okuduğu --q-primary değişkeni yalnızca
+    # düz düğmelerde değiştirilir; dolu (mavi zeminli) düğmeler aynı kalır.
+    ".body--dark .q-btn--flat { --q-primary: #A5B4FC; }\n"
+    # Kullanıcı avatarı da düz bir düğmenin içindedir; beyaz harf okunsun diye ana mavide kalır.
+    ".body--dark .q-btn--flat .q-avatar { --q-primary: " + PRIMARY_COLOR + "; }\n"
+    # Script açıklaması (markdown): paragraflar arası boşluk küçük, kod parçaları hafif zeminli.
+    ".script-description p { margin: 0 0 0.5rem 0; }\n"
+    ".script-description code { padding: 0 0.25rem; border-radius: 0.25rem; "
+    "background-color: rgba(148, 163, 184, 0.2); }"
+)
+
+# Arayüz dili -> Quasar dil paketi adı. Quasar'ın kendi metinleri ("No data available",
+# tarih seçici ay adları ...) bu paketten gelir.
+QUASAR_LANGUAGE_PACKS = {"tr": "tr", "en": "en-US"}
 
 
 def page_language() -> str:
@@ -108,6 +145,25 @@ def html_lang_script(language: str) -> str:
     return "<script>document.documentElement.lang = " + json.dumps(language) + ";</script>"
 
 
+def quasar_language_html(language: str) -> str:
+    """Quasar'ı verilen dile geçiren <script> etiketlerini döndürür.
+
+    Parametre: language - arayüz dili ("tr" ya da "en").
+    Dönüş: HTML metni; NiceGUI'nin varsayılanı olan en-US için ve bilinmeyen dilde boş metin.
+    """
+    pack = QUASAR_LANGUAGE_PACKS.get(language)
+    if pack is None or pack == "en-US":
+        return ""
+    source = "/_nicegui/" + nicegui_version + "/static/lang/" + pack + ".umd.prod.js"
+    # Neden iki betik: dil paketi Quasar'dan sonra (defer) yüklenmeli; Lang.set de
+    # paket yüklendikten sonra, sayfa hazır olunca çalışmalı.
+    return (
+        '<script defer src="' + source + '"></script>'
+        '<script>document.addEventListener("DOMContentLoaded", function () {'
+        " Quasar.Lang.set(Quasar.Lang[" + json.dumps(pack) + "]); });</script>"
+    )
+
+
 def apply_theme() -> None:
     """O anki sayfaya font, renk, zemin ve koyu tema ayarını uygular.
 
@@ -116,7 +172,10 @@ def apply_theme() -> None:
     ui.add_head_html(FONT_LINK)
     # Neden lang: Quasar düğme ve sekme yazılarını CSS ile büyük harfe çevirir; lang="tr"
     # olmadan tarayıcı "i" harfini "I" yapar ("GİRİŞ" yerine "GIRIŞ" görünür).
-    ui.add_head_html(html_lang_script(page_language()))
+    language = page_language()
+    ui.add_head_html(html_lang_script(language))
+    # Neden body: NiceGUI Quasar'ı body sonundaki "defer" betiklerle yükler; dil paketi ondan sonra gelmeli.
+    ui.add_body_html(quasar_language_html(language))
     ui.colors(
         primary=PRIMARY_COLOR,
         positive=POSITIVE_COLOR,
@@ -127,7 +186,8 @@ def apply_theme() -> None:
     # temada body'ye "body--dark" sınıfını ekler.
     ui.add_css(
         "body { background-color: " + BACKGROUND_COLOR + "; font-family: " + FONT_FAMILY + "; }\n"
-        "body.body--dark { background-color: " + DARK_BACKGROUND_COLOR + "; }"
+        "body.body--dark { background-color: " + DARK_BACKGROUND_COLOR + "; }\n"
+        + EXTRA_CSS
     )
 
     # Neden storage'a bağlanır: kullanıcının açık/koyu tema seçimi oturumlar

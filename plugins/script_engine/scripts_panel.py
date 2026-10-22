@@ -13,6 +13,7 @@ import os
 from nicegui import ui
 
 from app.core.kernel import get_kernel
+from app.core.layout import refresh_navigation
 from app.core.text import t
 from app.core.theme import PAGE_TITLE_CLASSES
 from app.core.widgets import page_card
@@ -91,6 +92,13 @@ class ScriptsPanel:
                     ui.button(t("script_engine.rescan"), icon="refresh", on_click=self.on_rescan_click).props("flat")
                 self.draw_table()
 
+    def redraw_after_change(self) -> None:
+        """Bir script yayınlanınca, değişince ya da kaldırılınca listeyi ve sol menüyü yeniler."""
+        # Neden önce menü: render() tıklanan düğmeyi siler; ondan sonra NiceGUI
+        # bağlamı (hangi tarayıcı sekmesi) bulunamaz.
+        refresh_navigation()
+        self.render()
+
     def build_place_text(self, entry: dict | None) -> str:
         """Kaydın menüdeki yerini "Bölüm / Grup" metni olarak üretir."""
         if entry is None:
@@ -167,7 +175,7 @@ class ScriptsPanel:
 
     def on_upload_click(self) -> None:
         """Yükleme sihirbazını 1. adımdan açar."""
-        ScriptWizard(self.kernel, self.render).open_new()
+        ScriptWizard(self.kernel, self.redraw_after_change).open_new()
 
     def on_rescan_click(self) -> None:
         """Klasörü yeniden tarar (elle bırakılan dosyalar listeye gelir)."""
@@ -181,7 +189,7 @@ class ScriptsPanel:
 
         Parametre: event - event.args tıklanan satırın verisidir.
         """
-        ScriptWizard(self.kernel, self.render).open_for_edit(event.args["script_id"])
+        ScriptWizard(self.kernel, self.redraw_after_change).open_for_edit(event.args["script_id"])
 
     def on_toggle_event(self, event) -> None:
         """Satırdaki etkin/devre dışı düğmesi: durumu tersine çevirir."""
@@ -198,7 +206,7 @@ class ScriptsPanel:
             ui.notify(t("script_engine.error", message=str(error)), type="negative")
             return
         ui.notify(t("script_engine.saved"), type="positive")
-        self.render()
+        self.redraw_after_change()
 
     def on_remove_event(self, event) -> None:
         """Satırdaki "Kaldır": onay dialogu açar."""
@@ -226,7 +234,7 @@ class ScriptsPanel:
             return
         self.dialog.close()
         ui.notify(t("script_engine.removed"), type="positive")
-        self.render()
+        self.redraw_after_change()
 
 
 

@@ -4,5 +4,10 @@
   "shell.dark_mode": "Koyu tema",
   "shell.logout": "Çıkış",
   "shell.forbidden": "Bu sayfaya erişim izniniz yok.",
-  "shell.empty": "Henüz gösterilecek bir sayfa yok."
+  "shell.empty": "Henüz gösterilecek bir sayfa yok.",
+  "shell.light_mode": "Açık tema",
+  "shell.not_found": "Sayfa bulunamadı.",
+  "shell.go_home": "Ana sayfaya dön",
+  "shell.yes": "Evet",
+  "shell.no": "Hayır"
 }

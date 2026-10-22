@@ -34,20 +34,20 @@ def run(host: str, count: int = 3):
         )
     except subprocess.TimeoutExpired:
         print("Ping zaman aşımına uğradı")
-        return {"host": host, "basarili": False, "paket_kaybi": "-", "ortalama_ms": "-"}
+        return {"Sunucu": host, "Başarılı": False, "Paket kaybı": "-", "Ortalama (ms)": "-"}
     except FileNotFoundError:
         print("ping komutu bulunamadı")
-        return {"host": host, "basarili": False, "paket_kaybi": "-", "ortalama_ms": "-"}
+        return {"Sunucu": host, "Başarılı": False, "Paket kaybı": "-", "Ortalama (ms)": "-"}
 
     output_text = (completed.stdout + completed.stderr).strip()
     # Tam çıktı script çıktısı olarak sayfadaki "Çıktı" bölümünde görünür.
     print(output_text)
 
     return {
-        "host": host,
-        "basarili": completed.returncode == 0,
-        "paket_kaybi": find_packet_loss(output_text),
-        "ortalama_ms": find_average_ms(output_text),
+        "Sunucu": host,
+        "Başarılı": completed.returncode == 0,
+        "Paket kaybı": find_packet_loss(output_text),
+        "Ortalama (ms)": find_average_ms(output_text),
     }
 
 

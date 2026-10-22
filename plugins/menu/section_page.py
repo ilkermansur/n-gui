@@ -13,7 +13,7 @@ from app.core.kernel import get_kernel
 from app.core.layout import create_shell_frame, get_current_user
 from app.core.navigation import nav_sort_key
 from app.core.text import t
-from app.core.theme import LABEL_CLASSES, NAV_ITEM_CLASSES, PAGE_TITLE_CLASSES
+from app.core.theme import NAV_ITEM_CLASSES, PAGE_TITLE_CLASSES
 from app.core.widgets import empty_state, page_card
 
 
@@ -33,20 +33,24 @@ def draw_item_row(item) -> None:
     """Tek bir menü öğesini ikon ve etiketle çizer; adresi varsa tıklanabilir olur."""
     if item.path:
         with ui.link(target=item.path).classes(NAV_ITEM_CLASSES):
-            ui.icon(item.icon, size="20px")
-            ui.label(item.label)
+            ui.icon(item.icon or "chevron_right", size="20px")
+            ui.label(item.label).classes("text-sm")
     else:
-        with ui.row().classes("items-center gap-3 px-3 py-2"):
-            ui.icon(item.icon, size="20px")
-            ui.label(item.label).classes(LABEL_CLASSES)
+        # Adresi olmayan öğe bir grup başlığıdır: kalın yazı, sayfa satırlarıyla aynı hizada.
+        with ui.row().classes("items-center gap-3 px-3 py-2 text-slate-700 dark:text-slate-200"):
+            ui.icon(item.icon or "folder", size="20px").classes("text-slate-400")
+            ui.label(item.label).classes("text-sm font-semibold")
 
 
 def draw_item_card(item, all_items: list) -> None:
-    """Bir öğeyi kart olarak çizer; grup gibi çocukları olan öğenin çocukları kartın içinde listelenir."""
+    """Bir öğeyi kart olarak çizer; grup gibi çocukları olan öğenin çocukları kartın içinde girintili listelenir."""
     with page_card().classes("gap-1"):
         draw_item_row(item)
-        for child in find_children(all_items, item.key):
-            draw_item_row(child)
+        children = find_children(all_items, item.key)
+        if children:
+            with ui.column().classes("w-full gap-1 pl-6"):
+                for child in children:
+                    draw_item_row(child)
 
 
 @ui.page("/section/{key}")

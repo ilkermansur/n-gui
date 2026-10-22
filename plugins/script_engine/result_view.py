@@ -53,10 +53,26 @@ def is_dict_list(value) -> bool:
     return True
 
 
+def display_value(value):
+    """Skaler bir değeri ekranda gösterilecek hale getirir.
+
+    Parametre: value - metin, sayı, bool ya da None.
+    Dönüş: bool için aktif dilde "Evet"/"Hayır", None için "-", diğerleri aynen.
+    """
+    # Neden önce bool: Python'da True bir int'tir; sayı gibi gösterilmesin.
+    if isinstance(value, bool):
+        if value:
+            return t("shell.yes")
+        return t("shell.no")
+    if value is None:
+        return "-"
+    return value
+
+
 def cell_text(value):
     """Tablo hücresine konacak değeri hazırlar; iç içe yapılar JSON metnine çevrilir."""
     if is_scalar(value):
-        return value
+        return display_value(value)
     return json.dumps(value, default=str, ensure_ascii=False)
 
 
@@ -64,9 +80,7 @@ def show_stat_cards(result: dict) -> None:
     """Skaler dict'i her anahtar için bir istatistik kartı olarak çizer."""
     with ui.row().classes("w-full gap-4"):
         for key, value in result.items():
-            if value is None:
-                value = "-"
-            stat_card(str(key), value)
+            stat_card(str(key), display_value(value))
 
 
 def show_table(rows: list) -> None:

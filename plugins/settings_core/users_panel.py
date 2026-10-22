@@ -10,6 +10,7 @@ fırlattığı ValueError (örn. kısa parola) ui.notify ile gösterilir.
 from nicegui import ui
 
 from app.core.kernel import get_kernel
+from app.core.layout import refresh_navigation
 from app.core.text import t
 from app.core.theme import LABEL_CLASSES, PAGE_TITLE_CLASSES
 from app.core.widgets import page_card
@@ -184,6 +185,9 @@ class UsersEditor:
         self.dialog.close()
         publish_settings_changed("users", "kullanıcı güncellendi (id " + str(self.selected_user_id) + ")")
         ui.notify(t("settings.saved"), type="positive")
+        # Neden: kendi rollerinizi değiştirdiyseniz sol menü buna göre değişir. Önce menü
+        # yenilenir; render() tıklanan düğmeyi silince NiceGUI bağlamı bulunamaz.
+        refresh_navigation()
         self.render()
 
     # ---------- Şifre sıfırla ----------

@@ -204,21 +204,23 @@ def create_widget(field: FieldSpec, handle: FormHandle):
 
 
 def build_form(fields: list[FieldSpec]) -> FormHandle:
-    """Çağrıldığı yerdeki NiceGUI bağlamına iki sütunlu bir form çizer.
+    """Çağrıldığı yerdeki NiceGUI bağlamına iki sütunlu bir form çizer (dar ekranda tek sütun).
 
     Parametre: fields - alan tarifleri. Dönüş: FormHandle.
     """
     handle = FormHandle(fields)
-    with ui.grid(columns=2).classes("w-full gap-4"):
+    # Neden columns verilmez: ui.grid(columns=2) satır içi stil yazar ve ekran genişliğine
+    # göre değişen Tailwind sınıflarını ezer. Telefonda alanlar alt alta dizilir.
+    with ui.grid().classes("w-full gap-4 grid-cols-1 md:grid-cols-2"):
         for field in fields:
             if field.field_type in WIDE_TYPES:
-                column_classes = "col-span-2 gap-0"
+                column_classes = "md:col-span-2 gap-0"
             else:
                 column_classes = "gap-0"
             with ui.column().classes(column_classes + " w-full"):
                 handle.widgets[field.name] = create_widget(field, handle)
                 if field.help_text:
-                    ui.label(field.help_text).classes("text-caption text-grey-7")
+                    ui.label(field.help_text).classes("text-xs text-slate-500 dark:text-slate-400")
                 error_label = ui.label("").classes("text-caption text-negative")
                 error_label.set_visibility(False)
                 handle.error_labels[field.name] = error_label

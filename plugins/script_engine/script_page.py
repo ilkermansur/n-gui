@@ -115,7 +115,9 @@ class ScriptPageView:
                 ui.label(self.service.pick_title(self.entry)).classes(PAGE_TITLE_CLASSES)
                 status_badge(t("script_engine.mode." + self.entry["mode"]), "gray")
             if self.spec.description:
-                ui.label(self.spec.description).classes(LABEL_CLASSES + " whitespace-pre-wrap")
+                # Neden markdown: docstring satırları elle kırılır; markdown tek satır sonlarını
+                # birleştirir, boş satırla paragraf ayırır ve `kod` yazımını biçimler.
+                ui.markdown(self.spec.description).classes(LABEL_CLASSES + " script-description")
             if self.entry["mode"] == "scheduled" and self.entry["schedule"]:
                 ui.label(t("script_engine.schedule_info", schedule=self.entry["schedule"])).classes(LABEL_CLASSES)
 

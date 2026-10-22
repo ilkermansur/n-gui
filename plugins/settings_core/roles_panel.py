@@ -9,6 +9,7 @@ kernel.list_permissions() sonucundan gelir.
 from nicegui import ui
 
 from app.core.kernel import get_kernel
+from app.core.layout import refresh_navigation
 from app.core.text import t
 from app.core.theme import LABEL_CLASSES, PAGE_TITLE_CLASSES
 from app.core.widgets import page_card
@@ -108,6 +109,8 @@ class RolesEditor:
             return
         publish_settings_changed("roles", "rol izinleri güncellendi: " + self.selected_role)
         ui.notify(t("settings.saved"), type="positive")
+        # Neden: kendi rolünüzün izinleri değiştiyse sol menü buna göre değişir.
+        refresh_navigation()
 
     def open_add_dialog(self) -> None:
         """Yeni rol adı için dialog açar."""

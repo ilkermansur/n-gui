@@ -17,6 +17,7 @@ from app.core.theme import (
     CONTENT_CLASSES,
     HEADER_CLASSES,
     NAV_ITEM_ACTIVE_CLASSES,
+    NAV_GROUP_CLASS,
     NAV_GROUP_HEADER_CLASSES,
     NAV_ITEM_CLASSES,
     PAGE_TITLE_CLASSES,
@@ -36,6 +37,10 @@ def get_current_user(kernel) -> dict | None:
     return auth.current_user()
 
 
+# app.storage.client içinde, açık sayfanın menüsünü yeniden çizen fonksiyonun anahtarı.
+NAVIGATION_REDRAW_KEY = "redraw_navigation"
+
+
 def create_shell_frame(kernel, page_title: str) -> ui.column:
     """Temayı uygular, header ve sidebar'ı çizer, içerik kolonunu döndürür.
 
@@ -45,24 +50,63 @@ def create_shell_frame(kernel, page_title: str) -> ui.column:
     apply_theme()
 
     user = get_current_user(kernel)
-    tree = build_navigation_tree(kernel.collect_nav_items(user))
     # Neden request yolu: "/script/{id}" gibi parametreli sayfalarda page.path
     # şablonu verir; menüdeki gerçek yol ile karşılaştırmak için istenen adres gerekir.
     current_path = ui.context.client.request.url.path
 
     # Neden önce drawer: header'daki menü düğmesi drawer'ı açıp kapatabilsin.
-    drawer = draw_sidebar(kernel, tree, current_path)
-    draw_header(kernel, page_title, user, tree, drawer)
+    drawer, nav_column = draw_sidebar(kernel)
+    search = draw_header(kernel, page_title, user, drawer)
+
+    def redraw_navigation() -> None:
+        """Menü ağacını ve arama seçeneklerini kullanıcının güncel yetkileriyle yeniden çizer."""
+        tree = build_navigation_tree(kernel.collect_nav_items(get_current_user(kernel)))
+        nav_column.clear()
+        with nav_column:
+            for node in tree:
+                render_nav_node(node, current_path)
+        search.set_options(build_search_options(tree))
+
+    redraw_navigation()
+    # Neden client deposu: menüyü değiştiren paneller (script, bölüm, rol) aynı sayfada
+    # refresh_navigation() çağırınca sidebar sayfa yenilenmeden güncellenir.
+    app.storage.client[NAVIGATION_REDRAW_KEY] = redraw_navigation
 
     return ui.column().classes(CONTENT_CLASSES)
 
 
-def draw_sidebar(kernel, tree: list[NavNode], current_path: str) -> ui.left_drawer:
-    """Sol menüyü çizer: üstte logo/uygulama adı, altında menü ağacı.
+def refresh_navigation() -> None:
+    """Açık sayfanın sol menüsünü ve aramasını yeniden çizer.
 
-    Parametreler: kernel - çekirdek (uygulama adı için); tree - menü ağacı;
-    current_path - açık sayfanın adresi (aktif öğeyi vurgulamak için).
-    Dönüş: oluşturulan ui.left_drawer.
+    Kim çağırır: menüyü etkileyen bir değişiklikten sonra ayar panelleri (script yayınlama,
+    kaldırma, bölüm ve grup düzenleme, rol izinleri). Sayfa create_shell_frame ile
+    çizilmemişse hiçbir şey yapmaz. Diğer kullanıcılar değişikliği bir sonraki sayfada görür.
+    Dikkat: tıklanan düğmeyi silen bir yeniden çizimden (panel.render()) ÖNCE çağrılmalıdır;
+    silinmiş düğmenin bağlamından açık sayfa bulunamaz.
+    """
+    redraw = app.storage.client.get(NAVIGATION_REDRAW_KEY)
+    if redraw is not None:
+        redraw()
+
+
+def build_search_options(tree: list[NavNode]) -> dict:
+    """Aramada önerilecek sayfaları "adres -> etiket" sözlüğü olarak döndürür.
+
+    Parametre: tree - menü ağacı. Neden ağaçtan: sahipsiz öğeler menüde olmadığı gibi
+    aramada da çıkmamalı.
+    """
+    options = {}
+    for item in flatten_navigation_tree(tree):
+        if item.path:
+            options[item.path] = item.label
+    return options
+
+
+def draw_sidebar(kernel) -> tuple[ui.left_drawer, ui.column]:
+    """Sol menüyü çizer: üstte logo/uygulama adı, altında menü ağacı için boş bir kolon.
+
+    Parametre: kernel - çekirdek (uygulama adı için).
+    Dönüş: (ui.left_drawer, menü kolonu). Menü ağacını create_shell_frame bu kolona çizer.
     """
     # Neden value=None: geniş ekranda açık, dar ekranda kapalı başlar (Quasar "show-if-above").
     # Neden top_corner=True: sidebar ekranın tam boyunu kaplar, header onun sağında kalır.
@@ -72,9 +116,8 @@ def draw_sidebar(kernel, tree: list[NavNode], current_path: str) -> ui.left_draw
             ui.label(kernel.config.app_title).classes(
                 "text-xl font-bold text-slate-800 dark:text-white"
             )
-        for node in tree:
-            render_nav_node(node, current_path)
-    return drawer
+        nav_column = ui.column().classes("w-full gap-1")
+    return drawer, nav_column
 
 
 def render_nav_node(node: NavNode, current_path: str) -> None:
@@ -90,7 +133,7 @@ def render_nav_node(node: NavNode, current_path: str) -> None:
         # Neden: aktif sayfa bu grubun altındaysa grup açık başlar.
         is_open = node_contains_path(node, current_path)
         expansion = ui.expansion(item.label, icon=item.icon, value=is_open)
-        expansion.classes("w-full text-sm")
+        expansion.classes("w-full text-sm " + NAV_GROUP_CLASS)
         expansion.props('dense header-class="' + NAV_GROUP_HEADER_CLASSES + '"')
         with expansion:
             with ui.column().classes("w-full gap-1 pl-4"):
@@ -126,35 +169,27 @@ def node_contains_path(node: NavNode, path: str) -> bool:
     return False
 
 
-def draw_header(kernel, page_title: str, user: dict | None, tree: list[NavNode], drawer) -> None:
+def draw_header(kernel, page_title: str, user: dict | None, drawer) -> ui.select:
     """Üst çubuğu çizer: menü düğmesi, başlık, arama, dil, tema ve kullanıcı menüsü.
 
     Parametreler: kernel - çekirdek; page_title - sayfa başlığı; user - kullanıcı ya da None;
-    tree - menü ağacı (aramada önerilecek öğeler); drawer - açıp kapatılacak sidebar.
-    Dönüş: yok.
+    drawer - açıp kapatılacak sidebar.
+    Dönüş: arama kutusu (seçeneklerini create_shell_frame menüyle birlikte doldurur).
     """
     # Neden düğmelerde color=None: Quasar renk sınıfları koyu temada değişmez;
     # renksiz düğmeler header'ın yazı rengini (açık/koyu) devralır.
     with ui.header().classes(HEADER_CLASSES):
         ui.button(icon="menu", color=None, on_click=drawer.toggle).props("flat round dense")
-        ui.label(page_title).classes(PAGE_TITLE_CLASSES)
+        ui.label(page_title).classes(PAGE_TITLE_CLASSES + " truncate min-w-0")
 
         ui.space()
 
         # Arama: seçenekler "adres -> etiket" sözlüğüdür; seçim yapılınca o adrese gidilir.
-        # Neden ağaçtan: sahipsiz öğeler menüde olmadığı gibi aramada da çıkmamalı.
-        search_options = {}
-        for item in flatten_navigation_tree(tree):
-            if item.path:
-                search_options[item.path] = item.label
-        search = ui.select(
-            search_options,
-            label=t("shell.search"),
-            with_input=True,
-            on_change=on_search_select,
-        )
+        search = ui.select({}, label=t("shell.search"), with_input=True, on_change=on_search_select)
         search.props("outlined dense clearable options-dense")
-        search.classes("w-64")
+        # Neden gt-xs: telefonda (600px altı) gizlenir, üst çubuk tek satıra sığar; sayfalara
+        # menüden gidilir. Tailwind "hidden md:block" olmaz: Quasar'ın .hidden sınıfı !important'tır.
+        search.classes("w-64 gt-xs")
 
         # Dil düğmesi: şu anki dili gösterir, tıklanınca diğer dile geçer.
         language_button = ui.button(
@@ -163,14 +198,17 @@ def draw_header(kernel, page_title: str, user: dict | None, tree: list[NavNode],
         language_button.props("flat dense")
         language_button.tooltip(t("shell.language"))
 
-        # Tema düğmesi: ikon, saklanan dark_mode değerine bağlıdır (ay / güneş).
+        # Tema düğmesi: ikon ve ipucu, saklanan dark_mode değerine bağlıdır (ay / güneş).
         theme_button = ui.button(color=None, on_click=on_dark_mode_click)
         theme_button.props("flat round dense")
         theme_button.bind_icon_from(app.storage.user, "dark_mode", backward=dark_mode_icon)
-        theme_button.tooltip(t("shell.dark_mode"))
+        with theme_button:
+            theme_tooltip = ui.tooltip()
+        theme_tooltip.bind_text_from(app.storage.user, "dark_mode", backward=dark_mode_tooltip)
 
         if user is not None:
             draw_user_menu(user)
+    return search
 
 
 def draw_user_menu(user: dict) -> None:
@@ -185,7 +223,8 @@ def draw_user_menu(user: dict) -> None:
         # Neden içine label: ui.avatar'ın ilk parametresi ikon adıdır; baş harf metin olarak eklenir.
         with ui.avatar(color="primary", text_color="white", size="32px"):
             ui.label(initial).classes("text-sm font-semibold")
-        ui.label(display_name).classes("ml-2 text-sm font-medium")
+        # Neden gt-xs: telefonda yalnızca avatar kalır, üst çubuk taşmaz.
+        ui.label(display_name).classes("ml-2 text-sm font-medium gt-xs")
         with ui.menu():
             ui.menu_item(t("shell.logout"), on_click=on_logout_click)
 
@@ -210,6 +249,17 @@ def dark_mode_icon(dark_mode_enabled) -> str:
     if dark_mode_enabled:
         return "light_mode"
     return "dark_mode"
+
+
+def dark_mode_tooltip(dark_mode_enabled) -> str:
+    """Tema düğmesinin ipucunu seçer: düğmeye basınca geçilecek temayı söyler.
+
+    Parametre: dark_mode_enabled - saklanan dark_mode değeri.
+    Dönüş: koyu tema açıksa "Açık tema", değilse "Koyu tema" (aktif dilde).
+    """
+    if dark_mode_enabled:
+        return t("shell.light_mode")
+    return t("shell.dark_mode")
 
 
 def on_search_select(event: events.ValueChangeEventArguments) -> None:

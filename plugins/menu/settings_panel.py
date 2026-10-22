@@ -10,9 +10,26 @@ bu paneli yetki kontrolünden sonra çağırır, burada ayrıca kontrol yapılma
 from nicegui import ui
 
 from app.core.kernel import get_kernel
+from app.core.layout import refresh_navigation
 from app.core.text import t
 from app.core.theme import LABEL_CLASSES, PAGE_TITLE_CLASSES
 from app.core.widgets import page_card
+
+
+def publish_menu_changed(details: str) -> None:
+    """Menüde bir değişiklik olduğunu "settings.changed" olayıyla duyurur.
+
+    Parametre: details - kısa açıklama (örnek "bölüm eklendi: urun_b").
+    audit_log eklentisi bu olayı Log'a yazar; eklenti yoksa olayı dinleyen olmaz.
+    """
+    kernel = get_kernel()
+    auth = kernel.get_service("auth")
+    username = ""
+    if auth is not None:
+        user = auth.current_user()
+        if user is not None:
+            username = user["username"]
+    kernel.events.publish("settings.changed", {"username": username, "setting": "menu", "details": details})
 
 
 class MenuEditor:
@@ -32,6 +49,8 @@ class MenuEditor:
         self.icon_input = None
         self.order_input = None
         self.editing_key: str | None = None
+        # Silme onayı bekleyen grubun kimliği.
+        self.pending_group_id: int | None = None
 
     # ---------- Çizim ----------
 
@@ -46,6 +65,17 @@ class MenuEditor:
         with self.container:
             self.draw_sections_card()
             self.draw_groups_card()
+
+    def apply_change(self, details: str) -> None:
+        """Başarılı bir değişiklikten sonra olayı yayınlar, paneli ve sol menüyü yeniler.
+
+        Parametre: details - Log'a yazılacak kısa açıklama.
+        """
+        publish_menu_changed(details)
+        # Neden önce menü: render() tıklanan düğmeyi siler; ondan sonra NiceGUI
+        # bağlamı (hangi tarayıcı sekmesi) bulunamaz.
+        refresh_navigation()
+        self.render()
 
     def draw_sections_card(self) -> None:
         """Bölümler tablosunu ve ekle/düzenle/gizle/sil düğmelerini çizer."""
@@ -181,18 +211,20 @@ class MenuEditor:
                 key = (self.key_input.value or "").strip()
                 self.menu.create_section(key, name_tr, name_en, icon)
                 self.selected_key = key
+                details = "bölüm eklendi: " + key
             else:
                 current = self.find_section(self.editing_key)
                 self.menu.update_section(
                     self.editing_key, name_tr, name_en, icon,
                     int(self.order_input.value or 0), current["is_visible"],
                 )
+                details = "bölüm güncellendi: " + self.editing_key
         except ValueError as error:
             ui.notify(t("menu.error", message=str(error)), type="negative")
             return
         self.dialog.close()
         ui.notify(t("menu.saved"), type="positive")
-        self.render()
+        self.apply_change(details)
 
     def find_section(self, key: str) -> dict:
         """Anahtarı verilen bölümün sözlüğünü döndürür; yoksa ValueError."""
@@ -217,7 +249,10 @@ class MenuEditor:
         except ValueError as error:
             ui.notify(t("menu.error", message=str(error)), type="negative")
             return
-        self.render()
+        if section["is_visible"]:
+            self.apply_change("bölüm gizlendi: " + section["key"])
+        else:
+            self.apply_change("bölüm gösterildi: " + section["key"])
 
     def on_delete_section_click(self) -> None:
         """Seçili bölüm için onay dialogu açar."""
@@ -241,9 +276,10 @@ class MenuEditor:
             ui.notify(t("menu.error", message=str(error)), type="negative")
             return
         self.dialog.close()
+        deleted_key = self.selected_key
         self.selected_key = None
         ui.notify(t("menu.deleted"), type="positive")
-        self.render()
+        self.apply_change("bölüm silindi: " + deleted_key)
 
     # ---------- Gruplar ----------
 
@@ -274,21 +310,33 @@ class MenuEditor:
             return
         self.dialog.close()
         ui.notify(t("menu.saved"), type="positive")
-        self.render()
+        self.apply_change("grup eklendi: " + self.selected_key + " / " + name_tr)
 
     def on_delete_group_click(self, event) -> None:
-        """Tıklanan düğmenin grubunu siler.
+        """Tıklanan düğmenin grubu için onay dialogu açar.
 
         Parametre: event - tıklama olayı; düğme event.sender ile bulunur.
         """
-        group_id = event.sender.props["data-group-id"]
+        self.pending_group_id = event.sender.props["data-group-id"]
+        with ui.dialog() as self.dialog:
+            with page_card().classes("gap-2"):
+                ui.label(t("menu.confirm_delete_group"))
+                with ui.row().classes("justify-end w-full"):
+                    ui.button(t("menu.cancel"), on_click=self.dialog.close).props("flat")
+                    ui.button(t("menu.delete"), on_click=self.on_confirm_delete_group).props("color=negative")
+        self.dialog.open()
+
+    def on_confirm_delete_group(self) -> None:
+        """Onaydan sonra grubu siler; hatayı bildirimle gösterir."""
         try:
-            self.menu.delete_group(group_id)
+            self.menu.delete_group(self.pending_group_id)
         except ValueError as error:
+            self.dialog.close()
             ui.notify(t("menu.error", message=str(error)), type="negative")
             return
+        self.dialog.close()
         ui.notify(t("menu.deleted"), type="positive")
-        self.render()
+        self.apply_change("grup silindi (id " + str(self.pending_group_id) + ")")
 
 
 def build_menu_settings_panel() -> None:

@@ -11,7 +11,8 @@ from app.core.kernel import get_kernel
 def publish_settings_changed(setting: str, details: str) -> None:
     """Bir ayar değiştiğini duyurur.
 
-    Parametreler: setting - değişen ayarın adı ("users", "roles", "database");
+    Parametreler: setting - değişen ayarın adı ("users", "roles", "database"; menu eklentisi
+    aynı olayı "menu" adıyla kendisi yayınlar);
     details - kısa açıklama (parola ya da gizli bilgi içermemeli).
     Dönüş: yok.
     """

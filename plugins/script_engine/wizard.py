@@ -379,7 +379,7 @@ class ScriptWizard:
 
         self.placement_container.clear()
         with self.placement_container:
-            with ui.grid(columns=2).classes("w-full gap-4"):
+            with ui.grid().classes("w-full gap-4 grid-cols-1 md:grid-cols-2"):
                 self.title_tr_input = ui.input(t("script_engine.wizard.title_tr"), value=values["title_tr"])
                 self.title_tr_input.props("outlined").classes("w-full")
                 self.title_en_input = ui.input(t("script_engine.wizard.title_en"), value=values["title_en"])
