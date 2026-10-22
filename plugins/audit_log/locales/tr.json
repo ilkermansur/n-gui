@@ -1,0 +1,16 @@
+{
+  "audit_log.title": "Log",
+  "audit_log.permission.view": "Logları görüntüle",
+  "audit_log.search": "Ara",
+  "audit_log.refresh": "Yenile",
+  "audit_log.status_all": "Hepsi",
+  "audit_log.status_ok": "Başarılı",
+  "audit_log.status_error": "Hatalı",
+  "audit_log.col.time": "Zaman",
+  "audit_log.col.user": "Kullanıcı",
+  "audit_log.col.action": "İşlem",
+  "audit_log.col.target": "Hedef",
+  "audit_log.col.status": "Durum",
+  "audit_log.col.duration": "Süre (ms)",
+  "audit_log.col.details": "Detay"
+}

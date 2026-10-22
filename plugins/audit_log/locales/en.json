@@ -1,0 +1,16 @@
+{
+  "audit_log.title": "Log",
+  "audit_log.permission.view": "View logs",
+  "audit_log.search": "Search",
+  "audit_log.refresh": "Refresh",
+  "audit_log.status_all": "All",
+  "audit_log.status_ok": "Successful",
+  "audit_log.status_error": "Failed",
+  "audit_log.col.time": "Time",
+  "audit_log.col.user": "User",
+  "audit_log.col.action": "Action",
+  "audit_log.col.target": "Target",
+  "audit_log.col.status": "Status",
+  "audit_log.col.duration": "Duration (ms)",
+  "audit_log.col.details": "Details"
+}
