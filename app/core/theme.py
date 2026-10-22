@@ -6,7 +6,11 @@ değiştirmek bu tek dosyayı düzenlemek demektir. Her sayfa çizilmeden önce
 apply_theme() çağrılır (create_shell_frame bunu kendisi yapar).
 """
 
+import json
+
 from nicegui import app, ui
+
+from app.core import kernel as kernel_module
 
 # --- Renkler ---
 # TailAdmin'in birincil mavisi; Quasar'da "primary" rengi olarak da kullanılır.
@@ -81,12 +85,38 @@ BADGE_COLOR_CLASSES = {
 }
 
 
+def page_language() -> str:
+    """O anki kullanıcının arayüz dilini döndürür.
+
+    Dönüş: i18n servisinin dili; kernel ya da i18n yoksa config varsayılanı, o da yoksa "tr".
+    """
+    # Neden doğrudan alan okunur: get_kernel() hazır değilken hata fırlatır.
+    kernel = kernel_module.current_kernel
+    if kernel is None:
+        return "tr"
+    i18n = kernel.get_service("i18n")
+    if i18n is None:
+        return kernel.config.default_language
+    return i18n.get_language()
+
+
+def html_lang_script(language: str) -> str:
+    """<html> öğesinin lang özelliğini ayarlayan betiği döndürür.
+
+    Parametre: language - dil kodu ("tr" ya da "en"). Dönüş: <script> etiketi metni.
+    """
+    return "<script>document.documentElement.lang = " + json.dumps(language) + ";</script>"
+
+
 def apply_theme() -> None:
     """O anki sayfaya font, renk, zemin ve koyu tema ayarını uygular.
 
     Her sayfanın başında bir kez çağrılır. Parametre ve dönüş yok.
     """
     ui.add_head_html(FONT_LINK)
+    # Neden lang: Quasar düğme ve sekme yazılarını CSS ile büyük harfe çevirir; lang="tr"
+    # olmadan tarayıcı "i" harfini "I" yapar ("GİRİŞ" yerine "GIRIŞ" görünür).
+    ui.add_head_html(html_lang_script(page_language()))
     ui.colors(
         primary=PRIMARY_COLOR,
         positive=POSITIVE_COLOR,
