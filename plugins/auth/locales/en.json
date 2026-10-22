@@ -6,5 +6,17 @@
   "auth.login.button": "Sign in",
   "auth.login.failed": "Wrong username or password.",
   "auth.permission.users_manage": "Manage users",
-  "auth.permission.roles_manage": "Manage roles"
+  "auth.permission.roles_manage": "Manage roles",
+  "auth.login.locked": "Too many failed attempts. The account is locked for {minutes} minutes.",
+  "auth.password.menu": "Change password",
+  "auth.password.title": "Change password",
+  "auth.password.hint": "At least {min} characters, at most 72 bytes.",
+  "auth.password.current": "Current password",
+  "auth.password.new": "New password",
+  "auth.password.repeat": "New password (again)",
+  "auth.password.cancel": "Cancel",
+  "auth.password.save": "Save",
+  "auth.password.mismatch": "The new passwords do not match.",
+  "auth.password.error": "Error: {message}",
+  "auth.password.changed": "Your password has been changed."
 }

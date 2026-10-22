@@ -6,5 +6,17 @@
   "auth.login.button": "Giriş",
   "auth.login.failed": "Kullanıcı adı veya şifre hatalı.",
   "auth.permission.users_manage": "Kullanıcıları yönet",
-  "auth.permission.roles_manage": "Rolleri yönet"
+  "auth.permission.roles_manage": "Rolleri yönet",
+  "auth.login.locked": "Çok fazla hatalı deneme. Hesap {minutes} dakika kilitlendi.",
+  "auth.password.menu": "Şifremi değiştir",
+  "auth.password.title": "Şifremi değiştir",
+  "auth.password.hint": "En az {min} karakter, en fazla 72 bayt.",
+  "auth.password.current": "Mevcut şifre",
+  "auth.password.new": "Yeni şifre",
+  "auth.password.repeat": "Yeni şifre (tekrar)",
+  "auth.password.cancel": "Vazgeç",
+  "auth.password.save": "Kaydet",
+  "auth.password.mismatch": "Yeni şifreler aynı değil.",
+  "auth.password.error": "Hata: {message}",
+  "auth.password.changed": "Şifreniz değiştirildi."
 }

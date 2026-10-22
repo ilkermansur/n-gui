@@ -51,10 +51,22 @@ class LoginForm:
         username = self.username_input.value or ""
         password = self.password_input.value or ""
 
+        # Neden önce kilit kontrolü: kilitli hesapta kullanıcıya "parola hatalı" yerine
+        # neden giremediği söylenir.
+        if auth.is_locked_out(username):
+            kernel.events.publish(
+                "auth.login_failed", {"username": username.lower().strip(), "reason": "locked"}
+            )
+            ui.notify(t("auth.login.locked", minutes=kernel.config.lockout_minutes), type="negative")
+            return
+
         user = auth.authenticate(username, password)
         if user is None:
             kernel.events.publish("auth.login_failed", {"username": username.lower().strip()})
-            ui.notify(t("auth.login.failed"), type="negative")
+            if auth.is_locked_out(username):
+                ui.notify(t("auth.login.locked", minutes=kernel.config.lockout_minutes), type="negative")
+            else:
+                ui.notify(t("auth.login.failed"), type="negative")
             return
 
         auth.login_user(user)

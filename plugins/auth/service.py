@@ -9,6 +9,7 @@ id, username, full_name, roles (list[str]), permissions (list[str]).
 """
 
 import logging
+import time
 
 from nicegui import app
 from sqlalchemy import select
@@ -48,14 +49,21 @@ def split_permissions(permissions_text: str) -> list[str]:
     return permissions
 
 
-def check_password_rules(password: str) -> None:
+# Varsayılan admin parolası; canlı ortamda bu parolayla açılmaya izin verilmez.
+DEFAULT_ADMIN_PASSWORD = "admin"
+# Hatalı giriş sayacının en çok tutacağı kullanıcı adı sayısı (bellek sınırı).
+MAX_TRACKED_LOGINS = 1000
+
+
+def check_password_rules(password: str, min_length: int = 8) -> None:
     """Parolanın uzunluk kurallarını denetler; kural bozuksa ValueError fırlatır.
 
-    Parametre: password - düz parola. En az 4 karakter olmalı.
+    Parametreler: password - düz parola; min_length - en az karakter sayısı
+    (config.toml [auth] min_password_length).
     Neden 72 bayt: bcrypt 72 bayttan fazlasını sessizce keser; bunu kullanıcıdan saklamayız.
     """
-    if len(password) < 4:
-        raise ValueError("Parola en az 4 karakter olmalı")
+    if len(password) < min_length:
+        raise ValueError("Parola en az " + str(min_length) + " karakter olmalı")
     if len(password.encode("utf-8")) > 72:
         raise ValueError("Parola en fazla 72 bayt olabilir")
 
@@ -64,9 +72,17 @@ class AuthService:
     """Kullanıcı, rol ve oturum işlerinin tek sahibi."""
 
     def __init__(self, kernel) -> None:
-        """Servisi kurar. Parametre: kernel - olay yayını için. Dönüş: yok."""
+        """Servisi kurar. Parametre: kernel - olay yayını ve ayarlar için. Dönüş: yok."""
         self.kernel = kernel
+        # Hatalı giriş sayacı: kullanıcı adı -> {"count", "last_failure", "locked_until"}.
+        # Neden bellekte: kilit kısa sürelidir; yeniden başlatınca sıfırlanması sorun değildir.
+        self.failed_logins: dict[str, dict] = {}
+        # Neden değiştirilebilir saat: testler zamanı elle ilerletebilsin.
+        self.clock = time.monotonic
 
+    def check_password(self, password: str) -> None:
+        """Parolayı config'teki en kısa uzunluk kuralıyla denetler; bozuksa ValueError."""
+        check_password_rules(password, self.kernel.config.min_password_length)
     # ---------- Yardımcılar ----------
 
     def build_user_dict(self, session, user: User) -> dict:
@@ -126,17 +142,66 @@ class AuthService:
         """Kullanıcı adı ve parolayı doğrular.
 
         Parametreler: username (büyük/küçük harf fark etmez); password.
-        Dönüş: kullanıcı sözlüğü; yanlış bilgi ya da pasif kullanıcıda None.
+        Dönüş: kullanıcı sözlüğü; yanlış bilgi, pasif kullanıcı ya da kilitli hesapta None.
+        Hatalı denemeler sayılır; [auth] max_login_attempts kez üst üste hata olursa
+        kullanıcı adı lockout_minutes dakika kilitlenir. Başarılı giriş sayacı sıfırlar.
         """
+        username = normalize_username(username)
+        if self.is_locked_out(username):
+            return None
         with get_session() as session:
-            user = session.scalar(
-                select(User).where(User.username == normalize_username(username))
-            )
-            if user is None or not user.is_active:
+            user = session.scalar(select(User).where(User.username == username))
+            # Neden var olmayan ad da sayılır: aksi halde kilitlenme davranışı hangi
+            # kullanıcı adlarının var olduğunu ele verirdi.
+            if user is None or not user.is_active or not verify_password(password, user.password_hash):
+                self.record_failed_login(username)
                 return None
-            if not verify_password(password, user.password_hash):
-                return None
+            self.failed_logins.pop(username, None)
             return self.build_user_dict(session, user)
+
+    # ---------- Giriş kilidi ----------
+
+    def is_locked_out(self, username: str) -> bool:
+        """Kullanıcı adı çok fazla hatalı deneme yüzünden şu an kilitli mi?
+
+        Parametre: username (büyük/küçük harf fark etmez). Dönüş: kilitliyse True.
+        """
+        record = self.failed_logins.get(normalize_username(username))
+        if record is None:
+            return False
+        return record["locked_until"] > self.clock()
+
+    def record_failed_login(self, username: str) -> None:
+        """Hatalı bir denemeyi sayar; sınır aşılınca kullanıcı adını kilitler.
+
+        Parametre: username - normalleştirilmiş ad. Dönüş: yok.
+        """
+        max_attempts = self.kernel.config.max_login_attempts
+        if max_attempts <= 0:
+            return
+        now = self.clock()
+        window_seconds = self.kernel.config.lockout_minutes * 60
+        record = self.failed_logins.get(username)
+        # Neden sıfırlanır: uzun süre önceki hatalar yeni bir kilide sayılmamalı.
+        if record is None or now - record["last_failure"] > window_seconds:
+            record = {"count": 0, "last_failure": now, "locked_until": 0.0}
+        record["count"] += 1
+        record["last_failure"] = now
+        if record["count"] >= max_attempts:
+            record["locked_until"] = now + window_seconds
+            record["count"] = 0
+            logger.warning("Çok fazla hatalı giriş, kullanıcı adı kilitlendi: %s", username)
+        self.failed_logins[username] = record
+        self.forget_old_failures(now, window_seconds)
+
+    def forget_old_failures(self, now: float, window_seconds: float) -> None:
+        """Sayaç çok büyüdüyse süresi geçmiş kayıtları atar (rastgele adlarla bellek dolmasın)."""
+        if len(self.failed_logins) <= MAX_TRACKED_LOGINS:
+            return
+        for name in list(self.failed_logins):
+            record = self.failed_logins[name]
+            if record["locked_until"] <= now and now - record["last_failure"] > window_seconds:
+                del self.failed_logins[name]
 
     def get_user_by_id(self, user_id: int) -> dict | None:
         """Kullanıcıyı id ile okur. Dönüş: sözlük; yoksa ya da pasifse None."""
@@ -208,17 +273,24 @@ class AuthService:
         return users
 
     def create_user(
-        self, username: str, full_name: str, password: str, role_names: list[str]
+        self,
+        username: str,
+        full_name: str,
+        password: str,
+        role_names: list[str],
+        enforce_password_rules: bool = True,
     ) -> dict:
         """Yeni kullanıcı oluşturur.
 
-        Parametreler: username, full_name, password (düz), role_names.
+        Parametreler: username, full_name, password (düz), role_names;
+        enforce_password_rules - False ise uzunluk kuralı atlanır (yalnızca ilk admin için).
         Dönüş: kullanıcı sözlüğü. Kullanıcı adı doluysa/boşsa ya da parola kuralı bozuksa ValueError.
         """
         username = normalize_username(username)
         if not username:
             raise ValueError("Kullanıcı adı boş olamaz")
-        check_password_rules(password)
+        if enforce_password_rules:
+            self.check_password(password)
         with get_session() as session:
             existing = session.scalar(select(User).where(User.username == username))
             if existing is not None:
@@ -254,13 +326,36 @@ class AuthService:
 
     def change_password(self, user_id: int, new_password: str) -> None:
         """Kullanıcının parolasını değiştirir. Kullanıcı yoksa ya da parola kuralı bozuksa ValueError."""
-        check_password_rules(new_password)
+        self.check_password(new_password)
         with get_session() as session:
             user = session.get(User, user_id)
             if user is None:
                 raise ValueError(f"Kullanıcı bulunamadı: {user_id}")
             user.password_hash = hash_password(new_password)
             session.commit()
+
+    def change_own_password(self, user_id: int, current_password: str, new_password: str) -> None:
+        """Kullanıcının kendi parolasını değiştirir; mevcut parolayı bilmesi gerekir.
+
+        Parametreler: user_id; current_password - şu anki parola; new_password - yeni parola.
+        Mevcut parola yanlışsa, kullanıcı yoksa ya da yeni parola kurala uymuyorsa ValueError.
+        """
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if user is None or not verify_password(current_password, user.password_hash):
+                raise ValueError("Mevcut parola hatalı")
+        self.change_password(user_id, new_password)
+
+    def has_default_admin_password(self) -> bool:
+        """admin kullanıcısı hâlâ varsayılan "admin" parolasını mı kullanıyor?
+
+        Kim kullanır: main.py, canlı ortamda bu durumda uygulamayı açmaz.
+        """
+        with get_session() as session:
+            admin = session.scalar(select(User).where(User.username == "admin"))
+            if admin is None:
+                return False
+            return verify_password(DEFAULT_ADMIN_PASSWORD, admin.password_hash)
 
     # ---------- Rol yönetimi ----------
 
@@ -297,6 +392,20 @@ class AuthService:
             role.permissions_text = ",".join(permissions)
             session.commit()
 
+    def delete_role(self, name: str) -> None:
+        """Rolü siler. admin rolü ve en az bir kullanıcıya atanmış rol silinemez (ValueError)."""
+        if name == "admin":
+            raise ValueError("admin rolü silinemez")
+        with get_session() as session:
+            role = session.scalar(select(Role).where(Role.name == name))
+            if role is None:
+                raise ValueError(f"Rol bulunamadı: {name}")
+            link = session.scalar(select(UserRole).where(UserRole.role_id == role.id))
+            if link is not None:
+                raise ValueError(f"Bu rol kullanıcılara atanmış, önce rolü kullanıcılardan kaldırın: {name}")
+            session.delete(role)
+            session.commit()
+
     # ---------- Seed ----------
 
     def seed_defaults(self, initial_admin_password: str) -> None:
@@ -315,5 +424,9 @@ class AuthService:
         with get_session() as session:
             admin = session.scalar(select(User).where(User.username == "admin"))
         if admin is None:
-            self.create_user("admin", "Yönetici", initial_admin_password, ["admin"])
+            # Neden kural atlanır: geliştirme ortamında varsayılan "admin" parolası kısa olsa da
+            # ilk giriş yapılabilsin. Canlı ortamda main.py varsayılan parolayla açılmayı reddeder.
+            self.create_user(
+                "admin", "Yönetici", initial_admin_password, ["admin"], enforce_password_rules=False
+            )
             logger.info("Varsayılan admin kullanıcısı oluşturuldu")

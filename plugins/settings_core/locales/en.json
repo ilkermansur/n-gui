@@ -22,7 +22,7 @@
   "settings.users.add_title": "Add user",
   "settings.users.edit_title": "Edit user",
   "settings.users.password": "Password",
-  "settings.users.password_hint": "At least 4 characters, at most 72 bytes.",
+  "settings.users.password_hint": "At least {min} characters, at most 72 bytes.",
   "settings.users.cannot_deactivate_self": "You cannot deactivate your own account.",
   "settings.roles.tab": "Roles",
   "settings.roles.title": "Roles and permissions",
@@ -49,5 +49,8 @@
   "settings.database.url_required": "Database URL cannot be empty.",
   "settings.database.test_ok": "Connection successful.",
   "settings.database.test_failed": "Could not connect: {message}",
-  "settings.database.restart": "Saved. Restart the application for the change to take effect."
+  "settings.database.restart": "Saved. Restart the application for the change to take effect.",
+  "settings.roles.delete": "Delete role",
+  "settings.roles.confirm_delete": "Delete the role {name}?",
+  "settings.roles.deleted": "Role deleted."
 }

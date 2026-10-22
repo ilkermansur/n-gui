@@ -79,7 +79,12 @@ class RolesEditor:
         for key in sorted(permissions.keys()):
             label = key + " — " + t(permissions[key])
             self.checkboxes[key] = ui.checkbox(label, value=key in role["permissions"])
-        ui.button(t("settings.save"), icon="save", on_click=self.on_save_click)
+        with ui.row().classes("gap-2"):
+            ui.button(t("settings.save"), icon="save", on_click=self.on_save_click)
+            # Neden admin'de yok: admin rolü silinemez; düğmeyi göstermek yanıltıcı olurdu.
+            if role["name"] != "admin":
+                ui.button(t("settings.roles.delete"), icon="delete",
+                          on_click=self.open_delete_dialog).props("flat color=negative")
 
     def on_role_changed(self, event) -> None:
         """Rol seçicisi değişince seçili rolü saklar ve paneli yeniden çizer.
@@ -135,6 +140,31 @@ class RolesEditor:
         self.selected_role = name
         publish_settings_changed("roles", "rol eklendi: " + name)
         ui.notify(t("settings.saved"), type="positive")
+        self.render()
+
+    def open_delete_dialog(self) -> None:
+        """Seçili rolü silmek için onay dialogu açar."""
+        with ui.dialog() as self.dialog:
+            with page_card().classes("gap-2"):
+                ui.label(t("settings.roles.confirm_delete", name=self.selected_role))
+                with ui.row().classes("justify-end w-full"):
+                    ui.button(t("settings.cancel"), on_click=self.dialog.close).props("flat")
+                    ui.button(t("settings.roles.delete"), on_click=self.on_confirm_delete).props("color=negative")
+        self.dialog.open()
+
+    def on_confirm_delete(self) -> None:
+        """Onaydan sonra rolü siler; kullanıcıya atanmışsa servis hatasını bildirimle gösterir."""
+        name = self.selected_role
+        try:
+            self.auth.delete_role(name)
+        except ValueError as error:
+            self.dialog.close()
+            ui.notify(t("settings.error", message=str(error)), type="negative")
+            return
+        self.dialog.close()
+        self.selected_role = None
+        publish_settings_changed("roles", "rol silindi: " + name)
+        ui.notify(t("settings.roles.deleted"), type="positive")
         self.render()
 
 

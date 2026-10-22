@@ -9,7 +9,7 @@ import logging
 
 from app.core.config import AppConfig
 from app.core.events import EventBus
-from app.core.plugin import NavItem, SettingsPanel
+from app.core.plugin import NavItem, SettingsPanel, UserMenuItem
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ class Kernel:
         self.permissions: dict[str, str] = {}
         self.nav_providers: list = []
         self.settings_panels: list[SettingsPanel] = []
+        self.user_menu_items: list[UserMenuItem] = []
 
     def register_service(self, name: str, service) -> None:
         """Bir servisi adıyla kaydeder. Parametreler: name, service. Dönüş: yok."""
@@ -79,6 +80,14 @@ class Kernel:
     def list_settings_panels(self) -> list[SettingsPanel]:
         """Kayıtlı panellerin kopyasını döndürür."""
         return list(self.settings_panels)
+
+    def add_user_menu_item(self, item: UserMenuItem) -> None:
+        """Kullanıcı menüsüne satır ekler (örn. auth'un "Şifremi değiştir"). Parametre: item."""
+        self.user_menu_items.append(item)
+
+    def list_user_menu_items(self) -> list[UserMenuItem]:
+        """Kayıtlı kullanıcı menüsü satırlarının kopyasını döndürür."""
+        return list(self.user_menu_items)
 
 
 # Neden modül seviyesinde: uygulamada tek kernel var, her yer ona ulaşmalı.

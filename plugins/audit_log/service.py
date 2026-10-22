@@ -102,6 +102,7 @@ class AuditService:
         events.subscribe("auth.login", self.on_auth_login)
         events.subscribe("auth.login_failed", self.on_auth_login_failed)
         events.subscribe("auth.logout", self.on_auth_logout)
+        events.subscribe("auth.password_changed", self.on_auth_password_changed)
         events.subscribe("script.finished", self.on_script_finished)
         events.subscribe("scripts.changed", self.on_scripts_changed)
         events.subscribe("settings.changed", self.on_settings_changed)
@@ -111,8 +112,17 @@ class AuditService:
         self.write(data.get("username", ""), "auth.login")
 
     def on_auth_login_failed(self, data: dict) -> None:
-        """Başarısız girişi error durumuyla kaydeder. Parametre: data - {"username"}."""
-        self.write(data.get("username", ""), "auth.login_failed", status="error")
+        """Başarısız girişi error durumuyla kaydeder.
+
+        Parametre: data - {"username", isteğe bağlı "reason"}; reason "locked" ise hesap kilitlidir.
+        """
+        self.write(
+            data.get("username", ""), "auth.login_failed", status="error", details=data.get("reason", "") or ""
+        )
+
+    def on_auth_password_changed(self, data: dict) -> None:
+        """Kullanıcının kendi parolasını değiştirdiğini kaydeder. Parametre: data - {"username"}."""
+        self.write(data.get("username", ""), "auth.password_changed")
 
     def on_auth_logout(self, data: dict) -> None:
         """Çıkışı kaydeder. Parametre: data - {"username"}."""

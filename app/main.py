@@ -8,11 +8,12 @@ Eklentiler kendi sayfalarını setup() sırasında @ui.page ile kaydeder.
 
 import argparse
 import logging
+import sys
 
 from nicegui import ui
 
 from app.core.access import check_page_access
-from app.core.config import load_config
+from app.core.config import find_insecure_settings, load_config
 from app.core.db import create_all_tables, init_database
 from app.core.kernel import Kernel, get_kernel, set_kernel
 from app.core.layout import create_shell_frame, get_current_user
@@ -85,7 +86,43 @@ def not_found_page() -> None:
             ui.label(t("shell.not_found")).classes(
                 "text-lg font-semibold text-slate-700 dark:text-slate-200"
             )
-            ui.button(t("shell.go_home"), icon="home", on_click=lambda: ui.navigate.to("/")).props("flat")
+            ui.button(t("shell.go_home"), icon="home", on_click=on_go_home_click).props("flat")
+
+
+def on_go_home_click() -> None:
+    """"Ana sayfaya dön" düğmesi: "/" adresine gider. Parametre ve dönüş yok."""
+    ui.navigate.to("/")
+
+
+def find_security_problems(kernel) -> list[str]:
+    """Canlı ortamda kabul edilmeyecek güvenlik sorunlarını listeler.
+
+    Parametre: kernel - ayarlar ve (varsa) "auth" servisi için.
+    Dönüş: Türkçe sorun açıklamaları; boşsa sorun yok. Veritabanı hazır olduktan sonra
+    çağrılmalıdır (admin parolası veritabanından kontrol edilir).
+    """
+    problems = find_insecure_settings(kernel.config)
+    auth = kernel.get_service("auth")
+    if auth is not None and auth.has_default_admin_password():
+        problems.append(
+            'admin kullanıcısı varsayılan "admin" parolasını kullanıyor; giriş yapıp '
+            'kullanıcı menüsünden "Şifremi değiştir" ile değiştirin'
+        )
+    return problems
+
+
+def enforce_security(kernel) -> None:
+    """Güvenlik sorunlarını loglar; canlı ortamda ([app] environment = "production") varsa uygulamayı durdurur.
+
+    Parametre: kernel. Dönüş: yok. Neden durdurulur: varsayılan gizli anahtar ve parola ile
+    yayına çıkan bir uygulama, kodu bilen herkese açık demektir.
+    """
+    problems = find_security_problems(kernel)
+    for problem in problems:
+        logging.warning("Güvenlik: %s", problem)
+    if problems and kernel.config.environment == "production":
+        logging.critical("Canlı ortamda güvenlik sorunları var; uygulama açılmıyor.")
+        sys.exit(1)
 
 
 def main() -> None:
@@ -108,6 +145,7 @@ def main() -> None:
 
     for plugin_id, status in kernel.plugin_status.items():
         logging.info("Eklenti %s: %s", plugin_id, status)
+    enforce_security(kernel)
 
     # Neden root: NiceGUI eşleşmeyen her adreste root fonksiyonunu çağırır; böylece
     # İngilizce varsayılan 404 sayfası yerine kabuk içinde çevrilmiş bir sayfa görünür.

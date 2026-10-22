@@ -40,6 +40,15 @@ class NavItem:
 
 
 @dataclass
+class UserMenuItem:
+    """Sağ üstteki kullanıcı menüsünde ("Çıkış"ın üstünde) görünen bir satır."""
+
+    label_key: str  # çeviri anahtarı
+    icon: str
+    on_click: object  # parametre almayan fonksiyon (NiceGUI handler'ı)
+
+
+@dataclass
 class SettingsPanel:
     """Ayarlar sayfasında görünen bir panel."""
 

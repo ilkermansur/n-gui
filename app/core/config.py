@@ -12,18 +12,47 @@ from pathlib import Path
 import tomli_w
 
 
+# Varsayılan storage_secret değeri; production'da bununla açılmaya izin verilmez.
+DEFAULT_STORAGE_SECRET = "degistir-beni"
+# Güvenli sayılan en kısa storage_secret uzunluğu.
+MIN_STORAGE_SECRET_LENGTH = 32
+# Script sürecine varsayılan olarak aktarılan ortam değişkenleri. Neden kısa liste:
+# uygulamanın ortamındaki gizli değerler (API anahtarları, parolalar) script'lere sızmasın.
+DEFAULT_ENV_PASSTHROUGH = ["PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR", "TEMP", "TMP"]
+
+
+def default_env_passthrough() -> list[str]:
+    """AppConfig için varsayılan env_passthrough listesinin kopyasını döndürür.
+
+    Neden fonksiyon: dataclass'ta liste varsayılanı her nesne için ayrı kopya olmalı.
+    """
+    return list(DEFAULT_ENV_PASSTHROUGH)
+
+
 @dataclass
 class AppConfig:
     """Uygulamanın tüm ayarlarını tutan veri sınıfı (varsayılanlarla birlikte)."""
 
     app_title: str = "N-GUI"
     database_url: str = "sqlite:///data/app.db"
-    storage_secret: str = "degistir-beni"
+    storage_secret: str = DEFAULT_STORAGE_SECRET
     scripts_folder: str = "scripts"
     disabled_plugins: list[str] = field(default_factory=list)
     default_language: str = "tr"
     port: int = 8080
     initial_admin_password: str = "admin"
+    # "development" ya da "production". production'da güvensiz ayarlarla uygulama açılmaz.
+    environment: str = "development"
+    # Parola kuralı ve giriş kilidi ([auth]). max_login_attempts 0 ise kilit yoktur.
+    min_password_length: int = 8
+    max_login_attempts: int = 5
+    lockout_minutes: int = 15
+    # Log ve script çalışma geçmişinin saklanacağı gün sayısı ([audit]); 0 = sonsuza dek.
+    retention_days: int = 0
+    # Script'leri çalıştıran Python yorumlayıcısı ([scripts] python); boşsa uygulamanınki.
+    scripts_python: str = ""
+    # Script sürecine aktarılacak ortam değişkenleri ([scripts] env_passthrough).
+    scripts_env_passthrough: list[str] = field(default_factory=default_env_passthrough)
     # Neden burada: ayarlar sayfası değişiklikleri hangi dosyaya yazacağını bilmeli.
     config_path: str = "config.toml"
 
@@ -49,6 +78,7 @@ def load_config(path: str) -> AppConfig:
     plugins_section = data.get("plugins", {})
     scripts_section = data.get("scripts", {})
     auth_section = data.get("auth", {})
+    audit_section = data.get("audit", {})
 
     config.app_title = app_section.get("title", config.app_title)
     config.port = app_section.get("port", config.port)
@@ -60,7 +90,32 @@ def load_config(path: str) -> AppConfig:
     config.initial_admin_password = auth_section.get(
         "initial_admin_password", config.initial_admin_password
     )
+    config.environment = app_section.get("environment", config.environment)
+    config.min_password_length = auth_section.get("min_password_length", config.min_password_length)
+    config.max_login_attempts = auth_section.get("max_login_attempts", config.max_login_attempts)
+    config.lockout_minutes = auth_section.get("lockout_minutes", config.lockout_minutes)
+    config.retention_days = audit_section.get("retention_days", config.retention_days)
+    config.scripts_python = scripts_section.get("python", config.scripts_python)
+    config.scripts_env_passthrough = scripts_section.get(
+        "env_passthrough", config.scripts_env_passthrough
+    )
     return config
+
+
+def find_insecure_settings(config: AppConfig) -> list[str]:
+    """Canlı ortam için güvensiz ayarları bulur.
+
+    Parametre: config - okunmuş ayarlar.
+    Dönüş: sorunların Türkçe açıklama listesi; boşsa sorun yok.
+    Admin parolasının kontrolü auth servisindedir (veritabanı gerekir), burada yapılmaz.
+    """
+    problems = []
+    if config.storage_secret == DEFAULT_STORAGE_SECRET or len(config.storage_secret) < MIN_STORAGE_SECRET_LENGTH:
+        problems.append(
+            "[app] storage_secret varsayılan değerde ya da " + str(MIN_STORAGE_SECRET_LENGTH)
+            + " karakterden kısa; uzun ve rastgele bir değer verin"
+        )
+    return problems
 
 
 def save_config_value(path: str, section: str, key: str, value) -> None:

@@ -22,7 +22,7 @@
   "settings.users.add_title": "Kullanıcı ekle",
   "settings.users.edit_title": "Kullanıcıyı düzenle",
   "settings.users.password": "Şifre",
-  "settings.users.password_hint": "En az 4 karakter, en fazla 72 bayt.",
+  "settings.users.password_hint": "En az {min} karakter, en fazla 72 bayt.",
   "settings.users.cannot_deactivate_self": "Kendi hesabınızı pasif yapamazsınız.",
   "settings.roles.tab": "Roller",
   "settings.roles.title": "Roller ve izinler",
@@ -49,5 +49,8 @@
   "settings.database.url_required": "Veritabanı adresi boş olamaz.",
   "settings.database.test_ok": "Bağlantı başarılı.",
   "settings.database.test_failed": "Bağlantı kurulamadı: {message}",
-  "settings.database.restart": "Kaydedildi. Değişikliğin geçerli olması için uygulamayı yeniden başlatın."
+  "settings.database.restart": "Kaydedildi. Değişikliğin geçerli olması için uygulamayı yeniden başlatın.",
+  "settings.roles.delete": "Rolü sil",
+  "settings.roles.confirm_delete": "{name} rolü silinsin mi?",
+  "settings.roles.deleted": "Rol silindi."
 }

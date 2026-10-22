@@ -1,6 +1,6 @@
 """test_config.py - app/core/config.py için testler."""
 
-from app.core.config import AppConfig, load_config, save_config_value
+from app.core.config import AppConfig, find_insecure_settings, load_config, save_config_value
 
 
 def test_missing_file_returns_defaults(tmp_path):
@@ -60,3 +60,33 @@ def test_load_config_remembers_path(tmp_path):
     path = str(tmp_path / "yok.toml")
     assert load_config(path).config_path == path
     assert AppConfig().config_path == "config.toml"
+
+
+def test_reads_security_settings(tmp_path):
+    """Güvenlik ve saklama ayarları dosyadan okunur."""
+    path = tmp_path / "config.toml"
+    path.write_text(
+        '[app]\nenvironment = "production"\n'
+        '[auth]\nmin_password_length = 10\nmax_login_attempts = 7\nlockout_minutes = 30\n'
+        '[audit]\nretention_days = 90\n'
+        '[scripts]\npython = "/usr/bin/python3"\nenv_passthrough = ["PATH", "ORACLE_HOME"]\n',
+        encoding="utf-8",
+    )
+    result = load_config(str(path))
+    assert result.environment == "production"
+    assert result.min_password_length == 10
+    assert result.max_login_attempts == 7
+    assert result.lockout_minutes == 30
+    assert result.retention_days == 90
+    assert result.scripts_python == "/usr/bin/python3"
+    assert result.scripts_env_passthrough == ["PATH", "ORACLE_HOME"]
+
+
+def test_insecure_settings_reports_default_secret():
+    """Varsayılan ya da kısa storage_secret güvensiz sayılır; uzun rastgele değer sorun değildir."""
+    config = AppConfig()
+    assert len(find_insecure_settings(config)) == 1
+    config.storage_secret = "kisa"
+    assert len(find_insecure_settings(config)) == 1
+    config.storage_secret = "x" * 32
+    assert find_insecure_settings(config) == []

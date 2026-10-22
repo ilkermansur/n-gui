@@ -200,7 +200,7 @@ class UsersEditor:
         with ui.dialog() as self.dialog:
             with page_card().classes("min-w-[360px] gap-2"):
                 ui.label(t("settings.users.reset_password") + ": " + user["username"]).classes(PAGE_TITLE_CLASSES)
-                ui.label(t("settings.users.password_hint")).classes(LABEL_CLASSES)
+                ui.label(t("settings.users.password_hint", min=get_kernel().config.min_password_length)).classes(LABEL_CLASSES)
                 self.password_input = ui.input(t("settings.users.password"), password=True,
                                                password_toggle_button=True).props("outlined dense")
                 with ui.row().classes("justify-end w-full"):

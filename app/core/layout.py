@@ -207,17 +207,22 @@ def draw_header(kernel, page_title: str, user: dict | None, drawer) -> ui.select
         theme_tooltip.bind_text_from(app.storage.user, "dark_mode", backward=dark_mode_tooltip)
 
         if user is not None:
-            draw_user_menu(user)
+            draw_user_menu(kernel, user)
     return search
 
 
-def draw_user_menu(user: dict) -> None:
-    """Sağ üstteki kullanıcı avatarını ve açılır menüsünü (Çıkış) çizer.
+def draw_user_menu(kernel, user: dict) -> None:
+    """Sağ üstteki kullanıcı avatarını ve açılır menüsünü çizer.
 
-    Parametre: user - "auth" servisinden gelen kullanıcı sözlüğü. Dönüş: yok.
+    Parametreler: kernel - eklentilerin eklediği menü satırları için; user - "auth"
+    servisinden gelen kullanıcı sözlüğü. Menü: eklenti satırları, sonra "Çıkış". Dönüş: yok.
     """
     display_name = user.get("full_name") or user.get("username") or ""
-    initial = display_name[:1].upper()
+    initial = display_name[:1]
+    # Neden: Python "i".upper() "I" verir; Türkçe adlarda baş harf "İ" olmalı.
+    if initial == "i" and current_language(kernel) == "tr":
+        initial = "İ"
+    initial = initial.upper()
 
     with ui.button(color=None).props("flat no-caps dense"):
         # Neden içine label: ui.avatar'ın ilk parametresi ikon adıdır; baş harf metin olarak eklenir.
@@ -226,6 +231,8 @@ def draw_user_menu(user: dict) -> None:
         # Neden gt-xs: telefonda yalnızca avatar kalır, üst çubuk taşmaz.
         ui.label(display_name).classes("ml-2 text-sm font-medium gt-xs")
         with ui.menu():
+            for menu_item in kernel.list_user_menu_items():
+                ui.menu_item(t(menu_item.label_key), on_click=menu_item.on_click)
             ui.menu_item(t("shell.logout"), on_click=on_logout_click)
 
 
