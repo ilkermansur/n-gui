@@ -98,6 +98,7 @@ class ScriptWizard:
         self.roles_select = None
         self.timeout_input = None
         self.refresh_input = None
+        self.access_warning_label = None
         self.schedule_input = None
 
     # ---------- Açma ----------
@@ -412,7 +413,11 @@ class ScriptWizard:
                 self.mode_select.props("outlined").classes("w-full")
 
                 self.roles_select = ui.select(
-                    role_names, label=t("script_engine.wizard.roles"), value=selected_roles, multiple=True
+                    role_names,
+                    label=t("script_engine.wizard.roles"),
+                    value=selected_roles,
+                    multiple=True,
+                    on_change=self.on_roles_change,
                 )
                 self.roles_select.props("outlined use-chips").classes("w-full")
                 self.timeout_input = ui.number(
@@ -428,11 +433,52 @@ class ScriptWizard:
                 self.schedule_input.props("outlined").classes("w-full")
             ui.label(t("script_engine.wizard.new_group_hint")).classes(LABEL_CLASSES)
             ui.label(t("script_engine.wizard.roles_hint")).classes(LABEL_CLASSES)
+            # Bölümü göremeyen roller için uyarı (update_access_warning doldurur).
+            self.access_warning_label = ui.label("").classes("text-sm text-amber-600 dark:text-amber-400")
         self.update_mode_fields()
+        self.update_access_warning()
+
+    def is_schedule_valid(self, schedule: str) -> bool:
+        """Zamanlanmış mod için cron ifadesini denetler; hatalıysa uyarı gösterip False döner.
+
+        Denetim "scheduler" servisine yaptırılır; eklenti kapalıysa ifade olduğu gibi kabul edilir.
+        """
+        scheduler = self.kernel.get_service("scheduler")
+        if scheduler is None:
+            return True
+        error = scheduler.validate_schedule(schedule)
+        if error:
+            ui.notify(t("script_engine.wizard.schedule_invalid", message=error), type="warning")
+            return False
+        return True
 
     def on_section_change(self, event) -> None:
         """Bölüm değişince grup seçicisini o bölümün gruplarıyla doldurur."""
         self.group_select.set_options(self.build_group_options(event.value), value=NO_GROUP)
+        self.update_access_warning()
+
+    def on_roles_change(self, event) -> None:
+        """Roller değişince bölüm erişimi uyarısını günceller."""
+        self.update_access_warning()
+
+    def update_access_warning(self) -> None:
+        """Script'i çalıştırabilecek ama seçili bölümü göremeyen rolleri uyarı olarak gösterir.
+
+        Neden: script menüde bölümünün altında görünür; rolün bölümü görme izni
+        (section.<anahtar>.view) yoksa o roldeki kullanıcı script'i menüde bulamaz.
+        """
+        section_key = self.section_select.value
+        if not section_key:
+            self.access_warning_label.set_text("")
+            return
+        roles = list(self.roles_select.value or [])
+        missing = self.service.find_roles_without_section_access(section_key, roles)
+        if len(missing) == 0:
+            self.access_warning_label.set_text("")
+            return
+        self.access_warning_label.set_text(
+            t("script_engine.wizard.access_warning", roles=", ".join(missing), section=section_key)
+        )
 
     def on_mode_change(self, event) -> None:
         """Mod değişince yalnızca ilgili süre alanlarını gösterir."""
@@ -470,6 +516,8 @@ class ScriptWizard:
             ui.notify(t("script_engine.wizard.seconds_invalid"), type="warning")
             return
         schedule = (self.schedule_input.value or "").strip()
+        if self.mode_select.value == "scheduled" and not self.is_schedule_valid(schedule):
+            return
         new_group_name = (self.new_group_input.value or "").strip()
         was_new = self.entry is None
 

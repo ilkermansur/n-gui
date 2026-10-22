@@ -96,3 +96,11 @@ def test_run_job_swallows_errors():
 
     scripts.fail = True
     script_scheduler.run_job("a")
+
+
+def test_validate_schedule():
+    """Geçerli cron boş mesaj, geçersiz ya da boş ifade hata mesajı döndürür."""
+    script_scheduler = ScriptScheduler(BackgroundScheduler(), None)
+    assert script_scheduler.validate_schedule("0 8 * * *") == ""
+    assert script_scheduler.validate_schedule("") != ""
+    assert script_scheduler.validate_schedule("99 * * * *") != ""

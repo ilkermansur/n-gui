@@ -324,3 +324,144 @@ def test_current_username(service, kernel):
     assert service.current_username() == ""
     kernel.register_service("auth", FakeAuthWithUser({"username": "ali"}))
     assert service.current_username() == "ali"
+
+
+LIVE_SCRIPT = '''"""Canli.
+---
+mode: live
+---
+"""
+
+
+def run(limit: int = 5):
+    return {"limit": limit}
+'''
+
+
+class CountingService(ScriptService):
+    """execute çağrılarını sayan ScriptService (canlı mod paylaşımı testi için)."""
+
+    def __init__(self, kernel) -> None:
+        """Sayaçları sıfırlar."""
+        super().__init__(kernel)
+        self.execute_calls = []
+
+    def execute(self, script_id, arguments, username, record_success=True):
+        """Çağrıyı kaydeder ve gerçek execute'u çalıştırır."""
+        self.execute_calls.append({"arguments": arguments, "record_success": record_success})
+        return super().execute(script_id, arguments, username, record_success=record_success)
+
+
+class FakeClock:
+    """Elle ilerletilen sahte saat (saniye)."""
+
+    def __init__(self) -> None:
+        """Saat 100. saniyeden başlar."""
+        self.now = 100.0
+
+    def __call__(self) -> float:
+        """Şu anki sahte zamanı döndürür."""
+        return self.now
+
+
+def test_live_result_is_shared_between_viewers(kernel):
+    """Aynı yenileme aralığında ikinci izleyici script'i yeniden çalıştırmaz, sonucu paylaşır."""
+    service = CountingService(kernel)
+    clock = FakeClock()
+    service.clock = clock
+    with open(os.path.join(service.scripts_folder, "canli.py"), "w", encoding="utf-8") as file:
+        file.write(LIVE_SCRIPT)
+    service.publish("canli", "Canlı", "Live", "dashboard", None, "live", [], 30, 10, "")
+
+    first = service.run_live("canli", "ali")
+    second = service.run_live("canli", "veli")
+    assert first.result.result == {"limit": 5}
+    assert second.result is first.result
+    assert len(service.execute_calls) == 1
+    # Neden: ilk çalıştırma (kimse izlemiyorken) geçmişe yazılır.
+    assert service.execute_calls[0]["record_success"] is True
+    assert service.execute_calls[0]["arguments"] == {"limit": 5}
+
+    clock.now += 10
+    service.run_live("canli", "ali")
+    assert len(service.execute_calls) == 2
+    # Neden: izlenmeye devam eden panonun yenilemesi başarılıysa Log'a yazılmaz.
+    assert service.execute_calls[1]["record_success"] is False
+
+    clock.now += 100
+    service.run_live("canli", "ali")
+    assert service.execute_calls[2]["record_success"] is True
+
+
+def test_parse_cache_reuses_result_until_file_changes(service):
+    """Değişmeyen dosya önbellekten okunur; dosya değişince yeniden okunur."""
+    path = os.path.join(service.scripts_folder, "toplama.py")
+    with open(path, "w", encoding="utf-8") as file:
+        file.write(GOOD_SCRIPT)
+    first = service.parse("toplama")
+    second = service.parse("toplama")
+    assert first == second
+    assert first is not second
+    with open(path, "w", encoding="utf-8") as file:
+        file.write(GOOD_SCRIPT.replace("Toplama, en: Sum", "Yeni, en: New"))
+    stat = os.stat(path)
+    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 5_000_000_000))
+    assert service.parse("toplama").title_tr == "Yeni"
+
+
+class FakeAuthRoles:
+    """Yalnızca list_roles sağlayan sahte auth servisi."""
+
+    def list_roles(self):
+        """Üç rol: biri her şeyi görür, biri bölümü görür, biri görmez."""
+        return [
+            {"name": "admin", "permissions": ["*"]},
+            {"name": "operator", "permissions": ["section.operation.view"]},
+            {"name": "viewer", "permissions": ["section.dashboard.view"]},
+        ]
+
+
+def test_roles_without_section_access(service, kernel):
+    """Bölümü göremeyen roller bulunur; rol listesi boşsa bütün roller denetlenir."""
+    kernel.register_service("auth", FakeAuthRoles())
+    assert service.find_roles_without_section_access("operation", ["operator", "viewer"]) == ["viewer"]
+    assert service.find_roles_without_section_access("operation", []) == ["viewer"]
+    assert service.find_roles_without_section_access("dashboard", ["admin"]) == []
+
+
+class FakeFormsWithUploads(FakeForms):
+    """Silinmesi istenen yüklenmiş dosyaları kaydeden sahte forms servisi."""
+
+    def __init__(self) -> None:
+        """Silinen yolların listesi."""
+        self.discarded = []
+
+    def discard_uploaded_file(self, path):
+        """Yolu kaydeder (gerçekte dosyayı siler)."""
+        self.discarded.append(path)
+
+
+FILE_SCRIPT = '''"""Dosya.
+---
+inputs:
+  belge: {type: file}
+---
+"""
+
+
+def run(belge=None):
+    return {"ok": True}
+'''
+
+
+def test_uploaded_files_are_discarded_after_run(service, kernel, tmp_path):
+    """Dosya alanına yüklenen dosya çalıştırma bitince forms servisine silinmek üzere verilir."""
+    forms = FakeFormsWithUploads()
+    kernel.register_service("forms", forms)
+    with open(os.path.join(service.scripts_folder, "dosya.py"), "w", encoding="utf-8") as file:
+        file.write(FILE_SCRIPT)
+    service.publish("dosya", "Dosya", "File", "operation", None, "form", [], 30, 30, "")
+    uploaded = str(tmp_path / "yuklenen.txt")
+    result = service.execute("dosya", {"belge": uploaded}, "ali")
+    assert result.success is True
+    assert forms.discarded == [uploaded]

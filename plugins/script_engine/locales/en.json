@@ -82,5 +82,7 @@
   "script_engine.wizard.title_required": "Title (TR) cannot be empty.",
   "script_engine.wizard.section_required": "Choose a section.",
   "script_engine.wizard.new_group_hint": "If 'New group' is filled, that name is used instead of the selected group; it is created on publish.",
-  "script_engine.wizard.seconds_invalid": "Timeout and refresh interval must be at least 1 second."
+  "script_engine.wizard.seconds_invalid": "Timeout and refresh interval must be at least 1 second.",
+  "script_engine.wizard.access_warning": "Warning: the role(s) {roles} can run this script but cannot see the '{section}' section, so it will not appear in their menu. Grant section.{section}.view in Settings > Roles.",
+  "script_engine.wizard.schedule_invalid": "Invalid schedule (cron): {message}"
 }

@@ -93,6 +93,23 @@ def create_datetime_widget(field: FieldSpec):
     return widget.props("outlined type=datetime-local stack-label").classes("w-full")
 
 
+def discard_uploaded_file(path: str, upload_folder: str = UPLOAD_FOLDER) -> bool:
+    """Yüklenmiş bir dosyayı siler; yalnızca yükleme klasörünün içindekileri.
+
+    Parametreler: path - silinecek dosyanın yolu; upload_folder - yükleme klasörü.
+    Dönüş: dosya silindiyse True. Neden klasör kontrolü: değer formdan gelir;
+    "../config.toml" gibi bir yol verilse bile klasör dışında hiçbir şey silinmemeli.
+    """
+    folder = os.path.realpath(upload_folder)
+    target = os.path.realpath(path)
+    if os.path.dirname(target) != folder:
+        return False
+    if not os.path.isfile(target):
+        return False
+    os.remove(target)
+    return True
+
+
 class FileFieldState:
     """Bir dosya alanının yükleme durumunu tutar.
 

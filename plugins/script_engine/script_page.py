@@ -11,8 +11,6 @@ ayrı bir thread'de çalıştırılır. Modlar:
 - scheduled: elle çalıştırma formu ve geçmiş çalıştırmalar tablosu
 """
 
-from datetime import datetime
-
 from nicegui import run, ui
 
 from app.core.access import check_page_access
@@ -82,7 +80,6 @@ class ScriptPageView:
         self.runs_table = None
         self.runs_by_id = {}
         self.timer = None
-        self.live_first_run_done = False
         self.updated_label = None
         self.run_dialog = None
 
@@ -179,13 +176,6 @@ class ScriptPageView:
 
     # ---------- Çalıştırma ----------
 
-    def collect_default_values(self) -> dict:
-        """Canlı mod için alanların varsayılan değerlerinden argüman sözlüğü üretir."""
-        values = {}
-        for field in self.spec.fields:
-            values[field.name] = field.default
-        return values
-
     async def on_run_click(self) -> None:
         """Formu doğrular, script'i ayrı thread'de çalıştırır ve sonucu çizer."""
         values, errors = self.form.submit()
@@ -210,26 +200,21 @@ class ScriptPageView:
             self.refresh_runs_table()
 
     async def refresh_live_result(self) -> None:
-        """Canlı mod zamanlayıcısının her tetiklenişinde script'i çalıştırıp sonucu yeniden çizer."""
-        # Neden: yalnızca sayfa açılışındaki ilk çalıştırma geçmişe yazılır; periyodik
-        # yenilemeler yalnızca başarısız olursa kaydedilir (Log dolmasın).
-        record_success = not self.live_first_run_done
-        self.live_first_run_done = True
+        """Canlı mod zamanlayıcısının her tetiklenişinde güncel sonucu alıp yeniden çizer."""
+        # Neden run_live: sonuç izleyiciler arasında paylaşılır; aynı aralıkta panoyu açan
+        # diğer kullanıcılar script'i yeniden çalıştırmaz. Hangi çalıştırmanın Log'a
+        # yazılacağına da servis karar verir.
         self.spinner.set_visibility(True)
         try:
-            result = await run.io_bound(
-                self.service.execute,
-                self.script_id,
-                self.collect_default_values(),
-                self.service.current_username(),
-                record_success=record_success,
+            live = await run.io_bound(
+                self.service.run_live, self.script_id, self.service.current_username()
             )
         finally:
             self.spinner.set_visibility(False)
-        if result is None:
+        if live is None:
             return
-        self.draw_result(result)
-        self.updated_label.set_text(t("script_engine.updated_at", time=format_time_now()))
+        self.draw_result(live.result)
+        self.updated_label.set_text(t("script_engine.updated_at", time=live.finished_at.strftime("%H:%M:%S")))
 
     def draw_result(self, result) -> None:
         """RunResult'ı sonuç kartı olarak çizer (önceki sonucu siler)."""
@@ -287,10 +272,6 @@ class ScriptPageView:
                     ui.button(t("script_engine.close"), on_click=self.run_dialog.close).props("flat")
         self.run_dialog.open()
 
-
-def format_time_now() -> str:
-    """Şu anki saati "08:00:05" biçiminde döndürür."""
-    return datetime.now().strftime("%H:%M:%S")
 
 
 @ui.page("/script/{script_id}")

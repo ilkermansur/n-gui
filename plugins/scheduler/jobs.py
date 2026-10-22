@@ -24,6 +24,20 @@ class ScriptScheduler:
         self.scheduler = scheduler
         self.scripts_service = scripts_service
 
+    def validate_schedule(self, schedule: str) -> str:
+        """Cron ifadesini denetler.
+
+        Parametre: schedule - 5 alanlı cron metni. Dönüş: sorun yoksa boş metin, varsa
+        Türkçe hata mesajı. Kim kullanır: script yükleme sihirbazı (yayınlamadan önce).
+        """
+        if not schedule:
+            return "Zamanlanmış mod için cron ifadesi gerekli"
+        try:
+            CronTrigger.from_crontab(schedule)
+        except ValueError as error:
+            return str(error)
+        return ""
+
     def sync_jobs(self, entries: list[dict]) -> list[str]:
         """Zamanlayıcıdaki işleri verilen kayıtlarla birebir eşitler.
 

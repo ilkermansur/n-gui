@@ -12,10 +12,16 @@ Nasıl bağlanır:
 - "menu" (bölüm/grup kontrolü) ve "forms" (argüman doğrulama) servisleri
   kernel.get_service ile kullanılır; bu eklentiler import edilmez.
 - Değişiklikler "scripts.changed", çalıştırmalar "script.finished" olayıyla duyurulur.
+- Okunan dosyalar (değişme zamanı ve boyutuyla) önbellekte tutulur; canlı moddaki
+  sonuçlar izleyiciler arasında paylaşılır (run_live).
 """
 
+import copy
 import json
 import os
+import threading
+import time
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import select
@@ -39,6 +45,17 @@ MODE_ICONS = {
 }
 
 MISSING_FILE_ERROR = "Dosya bulunamadı"
+
+
+@dataclass
+class LiveResult:
+    """Canlı moddaki bir çalıştırmanın paylaşılan sonucu.
+
+    result: RunResult; finished_at: sonucun üretildiği saat (ekranda "Son güncelleme").
+    """
+
+    result: RunResult
+    finished_at: datetime
 
 
 def split_roles(roles_text: str) -> list[str]:
@@ -112,6 +129,33 @@ class ScriptService:
         self.kernel = kernel
         self.scripts_folder = os.path.abspath(kernel.config.scripts_folder)
         os.makedirs(self.scripts_folder, exist_ok=True)
+        # Dosya yolu -> (değişme zamanı, boyut, ScriptSpec). Neden: Scriptler paneli ve
+        # zamanlayıcı her seferinde bütün klasörü okur; değişmeyen dosyayı yeniden ayrıştırmayalım.
+        self.parse_cache: dict[str, tuple] = {}
+        # Canlı mod: script_id -> {"live": LiveResult, "at": saat}. Kilitler aynı script'in
+        # iki izleyici için aynı anda iki kez çalışmasını engeller.
+        self.live_cache: dict[str, dict] = {}
+        self.live_locks: dict[str, threading.Lock] = {}
+        self.live_locks_guard = threading.Lock()
+        # Neden değiştirilebilir saat: testler zamanı elle ilerletebilsin.
+        self.clock = time.monotonic
+
+    def parse_file(self, path: str) -> ScriptSpec:
+        """Dosyayı ayrıştırır; değişmemişse önbellekteki sonucun kopyasını döndürür.
+
+        Parametre: path - .py dosyasının yolu. Dönüş: ScriptSpec (çağıran değiştirebilir,
+        önbellek etkilenmez). Dosya okunamazsa önbellek atlanır.
+        """
+        try:
+            stat = os.stat(path)
+        except OSError:
+            return parse_script_file(path)
+        cached = self.parse_cache.get(path)
+        if cached is not None and cached[0] == stat.st_mtime_ns and cached[1] == stat.st_size:
+            return copy.deepcopy(cached[2])
+        spec = parse_script_file(path)
+        self.parse_cache[path] = (stat.st_mtime_ns, stat.st_size, spec)
+        return copy.deepcopy(spec)
 
     # ---------- Dosyalar ----------
 
@@ -178,7 +222,7 @@ class ScriptService:
             spec = ScriptSpec(script_id=script_id, file_path="")
             spec.error = MISSING_FILE_ERROR
             return spec
-        return parse_script_file(path)
+        return self.parse_file(path)
 
     # ---------- Tarama ----------
 
@@ -222,7 +266,7 @@ class ScriptService:
 
         items_by_id = {}
         for name in self.list_script_files():
-            spec = parse_script_file(os.path.join(self.scripts_folder, name))
+            spec = self.parse_file(os.path.join(self.scripts_folder, name))
             items_by_id[spec.script_id] = {"spec": spec, "entry": None, "is_orphan": False}
 
         for script_id, entry in entries_by_id.items():
@@ -307,7 +351,7 @@ class ScriptService:
         path = self.find_script_file(script_id)
         if path is None:
             raise ValueError(MISSING_FILE_ERROR + ": " + script_id)
-        spec = parse_script_file(path)
+        spec = self.parse_file(path)
         if spec.error != "":
             raise ValueError(spec.error)
         if mode not in ALLOWED_MODES:
@@ -519,8 +563,105 @@ class ScriptService:
         if forms is not None:
             values, errors = forms.convert_and_validate(spec.fields, arguments)
             if len(errors) > 0:
+                self.discard_uploaded_files(spec, arguments)
                 return RunResult(False, None, "", "\n".join(errors), 0)
-        return run_script(spec.file_path, values, entry["timeout"])
+        config = self.kernel.config
+        try:
+            return run_script(
+                spec.file_path,
+                values,
+                entry["timeout"],
+                python_executable=config.scripts_python,
+                env_passthrough=config.scripts_env_passthrough,
+            )
+        finally:
+            self.discard_uploaded_files(spec, values)
+
+    def discard_uploaded_files(self, spec: ScriptSpec, values: dict) -> None:
+        """Dosya alanlarına yüklenen dosyaları çalıştırmadan sonra sildirir.
+
+        Parametreler: spec - alan tarifleri; values - alan adı -> değer (dosya yolu).
+        Neden: yüklenen dosyalar yalnızca o çalıştırma içindir; data/uploads büyümesin.
+        Silme işi dosyaları kaydeden "forms" servisine aittir; yalnızca kendi klasöründekileri siler.
+        """
+        forms = self.kernel.get_service("forms")
+        if forms is None or not hasattr(forms, "discard_uploaded_file"):
+            return
+        for field in spec.fields:
+            if field.field_type != "file":
+                continue
+            path = values.get(field.name)
+            if path:
+                forms.discard_uploaded_file(path)
+
+    def default_arguments(self, spec: ScriptSpec) -> dict:
+        """Canlı mod ve zamanlayıcı için alanların varsayılan değerlerinden argüman üretir."""
+        values = {}
+        for field in spec.fields:
+            values[field.name] = field.default
+        return values
+
+    def get_live_lock(self, script_id: str) -> threading.Lock:
+        """Script'e özel kilidi döndürür (yoksa oluşturur)."""
+        with self.live_locks_guard:
+            if script_id not in self.live_locks:
+                self.live_locks[script_id] = threading.Lock()
+            return self.live_locks[script_id]
+
+    def run_live(self, script_id: str, username: str) -> LiveResult:
+        """Canlı mod sonucunu döndürür; taze sonuç varsa script yeniden çalıştırılmaz.
+
+        Parametreler: script_id; username - çalıştıran (sonuç yeniden üretilirse kaydedilir).
+        Dönüş: LiveResult. Kurallar:
+        - Sonuç, kaydın yenileme aralığından (refresh) daha yeniyse aynısı döner. Böylece
+          panoyu 20 kişi açsa da script aralık başına bir kez çalışır.
+        - Aynı script aynı anda tek kez çalışır; bekleyen izleyiciler çıkan sonucu paylaşır.
+        - Başarılı sonuç yalnızca pano bir süredir izlenmiyorsa (önceki sonuç iki aralıktan
+          eskiyse) geçmişe ve Log'a yazılır; başarısız sonuç her zaman yazılır.
+        Worker thread'den çağrılmalıdır (run.io_bound); UI çağırmaz.
+        """
+        entry = self.get_entry(script_id)
+        refresh_seconds = 30
+        if entry is not None:
+            refresh_seconds = entry["refresh"]
+        # Neden 1 saniye pay: izleyicilerin zamanlayıcıları aynı anda tetiklenmez; sonuç
+        # tam aralık kadar bekletilirse geç kalan izleyici eski veriyi bir aralık daha görürdü.
+        max_age = max(refresh_seconds - 1, 1)
+        with self.get_live_lock(script_id):
+            now = self.clock()
+            cached = self.live_cache.get(script_id)
+            if cached is not None and now - cached["at"] < max_age:
+                return cached["live"]
+            record_success = cached is None or now - cached["at"] > refresh_seconds * 2
+            spec = self.parse(script_id)
+            result = self.execute(
+                script_id, self.default_arguments(spec), username, record_success=record_success
+            )
+            live = LiveResult(result=result, finished_at=datetime.now())
+            self.live_cache[script_id] = {"live": live, "at": self.clock()}
+            return live
+
+    # ---------- Yetki uyarıları ----------
+
+    def find_roles_without_section_access(self, section_key: str, role_names: list[str]) -> list[str]:
+        """Script'i çalıştırabilecek ama bölümü göremeyen (menüde bulamayacak) rolleri bulur.
+
+        Parametreler: section_key - script'in bölümü; role_names - script'in rol listesi
+        (boşsa bütün roller çalıştırabilir sayılır). Dönüş: rol adları (alfabetik).
+        "auth" servisi yoksa boş liste. "*" izinli roller her bölümü görür.
+        """
+        auth = self.kernel.get_service("auth")
+        if auth is None:
+            return []
+        permission = "section." + section_key + ".view"
+        missing = []
+        for role in auth.list_roles():
+            if len(role_names) > 0 and role["name"] not in role_names:
+                continue
+            if "*" in role["permissions"] or permission in role["permissions"]:
+                continue
+            missing.append(role["name"])
+        return sorted(missing)
 
     def record_run(self, script_id: str, username: str, started_at: datetime, result: RunResult) -> None:
         """Çalıştırma sonucunu ScriptRun tablosuna yazar (kendi DB oturumuyla)."""

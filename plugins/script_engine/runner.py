@@ -99,20 +99,43 @@ def kill_process_group(process):
         pass
 
 
-def run_with_arguments_file(file_path, arguments_path, timeout_seconds):
+def build_child_environment(env_passthrough):
+    """Script sürecinin ortam değişkenlerini hazırlar.
+
+    Parametre: env_passthrough - aktarılacak değişken adları; None ise bütün ortam aktarılır.
+    Dönüş: sözlük. Neden süzülür: uygulamanın ortamındaki gizli değerler (API anahtarı,
+    veritabanı parolası) yüklenen script'lere sızmasın.
+    """
+    if env_passthrough is None:
+        child_env = dict(os.environ)
+    else:
+        child_env = {}
+        for name in env_passthrough:
+            if name in os.environ:
+                child_env[name] = os.environ[name]
+    child_env["PYTHONIOENCODING"] = "utf-8"
+    return child_env
+
+
+def run_with_arguments_file(file_path, arguments_path, timeout_seconds, python_executable=None, env_passthrough=None):
     """Shim'i başlatır, bekler ve çıktıyı RunResult'a çevirir.
 
     Parametreler:
         file_path: çalıştırılacak .py dosyasının yolu.
         arguments_path: argümanların yazıldığı JSON dosyasının yolu.
         timeout_seconds: bu süre dolunca süreç grubu öldürülür.
+        python_executable: script'i çalıştıracak yorumlayıcı; None ise uygulamanınki.
+        env_passthrough: script'e aktarılacak ortam değişkenleri; None ise hepsi.
     Dönüş: RunResult.
     """
     script_folder = os.path.dirname(os.path.abspath(file_path))
+    if not python_executable:
+        python_executable = sys.executable
     # Neden -B: alt süreç script klasörüne __pycache__ yazmasın.
-    command = [sys.executable, "-I", "-B", SHIM_PATH, file_path, arguments_path]
-    child_env = dict(os.environ)
-    child_env["PYTHONIOENCODING"] = "utf-8"
+    # Neden ayrı yorumlayıcı mümkün: script'lerin paketleri uygulamanın ortamından ayrı
+    # bir sanal ortamda tutulabilsin. Shim yalnızca standart kütüphane kullanır.
+    command = [python_executable, "-I", "-B", SHIM_PATH, file_path, arguments_path]
+    child_env = build_child_environment(env_passthrough)
 
     started_at = time.monotonic()
     process = subprocess.Popen(
@@ -166,13 +189,15 @@ def run_with_arguments_file(file_path, arguments_path, timeout_seconds):
     return RunResult(True, result, output_text, stderr_text, duration_ms)
 
 
-def run_script(file_path, arguments, timeout_seconds):
+def run_script(file_path, arguments, timeout_seconds, python_executable=None, env_passthrough=None):
     """Script'i izole bir alt süreçte çalıştırır.
 
     Parametreler:
         file_path: çalıştırılacak .py dosyasının yolu.
         arguments: run(**arguments) ile verilecek sözlük.
         timeout_seconds: bu süre dolunca alt süreç grubu öldürülür.
+        python_executable: script'i çalıştıracak yorumlayıcı; None/boş ise uygulamanınki.
+        env_passthrough: script'e aktarılacak ortam değişkeni adları; None ise hepsi.
     Dönüş: RunResult (hazırlık veya başlatma hatalarında da istisna fırlatmaz).
     """
     arguments_path = None
@@ -187,7 +212,9 @@ def run_script(file_path, arguments, timeout_seconds):
         arguments_path = arguments_file.name
         json.dump(arguments, arguments_file, ensure_ascii=False)
         arguments_file.close()
-        return run_with_arguments_file(file_path, arguments_path, timeout_seconds)
+        return run_with_arguments_file(
+            file_path, arguments_path, timeout_seconds, python_executable, env_passthrough
+        )
     except Exception as error:
         # Serileştirilemeyen argüman, olmayan klasör gibi hazırlık hataları.
         return RunResult(False, None, "", "Script başlatılamadı: %s" % error, 0)

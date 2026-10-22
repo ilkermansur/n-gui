@@ -6,6 +6,7 @@ gerçek bir alt süreçte çalıştırır.
 """
 
 import os
+import sys
 import time
 
 import pytest
@@ -160,3 +161,38 @@ def test_relative_path_is_resolved(tmp_path, monkeypatch):
     assert result.success is True, result.error_text
     assert result.result == 7
     assert not (folder / "__pycache__").exists()
+
+
+ENV_SCRIPT = "import os\ndef run(**inputs):\n    return {'secret': os.environ.get('NGUI_TEST_SECRET', ''), 'path': os.environ.get('PATH', '')}\n"
+
+
+def test_environment_is_filtered_by_passthrough(tmp_path, monkeypatch):
+    """env_passthrough verilince yalnızca listedeki değişkenler script'e geçer."""
+    monkeypatch.setenv("NGUI_TEST_SECRET", "gizli")
+    result = run_script(write_script(tmp_path, ENV_SCRIPT), {}, 10, env_passthrough=["PATH"])
+    assert result.success is True
+    assert result.result["secret"] == ""
+    assert result.result["path"] != ""
+
+
+def test_environment_passthrough_none_keeps_full_environment(tmp_path, monkeypatch):
+    """env_passthrough verilmezse (None) tüm ortam aktarılır (eski davranış)."""
+    monkeypatch.setenv("NGUI_TEST_SECRET", "gizli")
+    result = run_script(write_script(tmp_path, ENV_SCRIPT), {}, 10)
+    assert result.result["secret"] == "gizli"
+
+
+def test_custom_python_executable(tmp_path):
+    """python_executable verilince script o yorumlayıcıyla çalışır."""
+    body = "import sys\ndef run(**inputs):\n    return sys.executable\n"
+    result = run_script(write_script(tmp_path, body), {}, 10, python_executable=sys.executable)
+    assert result.success is True
+    assert result.result == sys.executable
+
+
+def test_missing_python_executable_fails_cleanly(tmp_path):
+    """Olmayan yorumlayıcı istisna değil başarısız sonuç üretir."""
+    body = "def run(**inputs):\n    return 1\n"
+    result = run_script(write_script(tmp_path, body), {}, 10, python_executable="/yok/python")
+    assert result.success is False
+    assert "başlatılamadı" in result.error_text

@@ -82,5 +82,7 @@
   "script_engine.wizard.title_required": "Başlık (TR) boş olamaz.",
   "script_engine.wizard.section_required": "Bir bölüm seçin.",
   "script_engine.wizard.new_group_hint": "'Yeni grup' doluysa seçili grup yerine bu ad kullanılır; grup yayınlanınca oluşturulur.",
-  "script_engine.wizard.seconds_invalid": "Zaman aşımı ve yenileme aralığı en az 1 saniye olmalı."
+  "script_engine.wizard.seconds_invalid": "Zaman aşımı ve yenileme aralığı en az 1 saniye olmalı.",
+  "script_engine.wizard.access_warning": "Uyarı: {roles} rolü bu script'i çalıştırabilir ama '{section}' bölümünü göremez; script bu rollerin menüsünde görünmez. Ayarlar > Roller'den section.{section}.view iznini verin.",
+  "script_engine.wizard.schedule_invalid": "Zamanlama (cron) geçersiz: {message}"
 }

@@ -6,7 +6,7 @@ convert_and_validate ile UI'sız doğrulama yapar. Script motoru bu servisi kull
 """
 
 from app.core.plugin import Plugin
-from plugins.forms.builder import FormHandle, build_form
+from plugins.forms.builder import FormHandle, build_form, discard_uploaded_file
 from plugins.forms.validation import convert_and_validate
 
 
@@ -20,6 +20,13 @@ class FormsService:
     def convert_and_validate(self, fields: list, raw_values: dict) -> tuple[dict, list[str]]:
         """UI'sız doğrulama. Parametreler: fields, raw_values. Dönüş: (değerler, hatalar)."""
         return convert_and_validate(fields, raw_values)
+
+    def discard_uploaded_file(self, path: str) -> bool:
+        """Dosya alanına yüklenmiş dosyayı siler (yalnızca data/uploads içindekileri).
+
+        Kim kullanır: script motoru, çalıştırma bittikten sonra. Dönüş: silindiyse True.
+        """
+        return discard_uploaded_file(path)
 
 
 class FormsPlugin(Plugin):
