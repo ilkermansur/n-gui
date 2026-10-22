@@ -1,0 +1,8 @@
+{
+  "shell.search": "Search",
+  "shell.language": "Language",
+  "shell.dark_mode": "Dark mode",
+  "shell.logout": "Logout",
+  "shell.forbidden": "You do not have permission to view this page.",
+  "shell.empty": "There is no page to show yet."
+}
