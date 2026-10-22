@@ -85,3 +85,12 @@ def test_unknown_type_treated_as_str():
     ]
     values, errors = convert_and_validate(fields, {"x": 12, "d": "2026-01-02"})
     assert values == {"x": "12", "d": "2026-01-02"} and errors == []
+
+
+@pytest.mark.parametrize("field_type", ["int", "float"])
+@pytest.mark.parametrize("text", ["nan", "inf", "-inf"])
+def test_non_finite_numbers_rejected(field_type, text):
+    """nan/inf/-inf hem int hem float için forms.not_number olur (çökmez)."""
+    fields = [FieldSpec(name="n", field_type=field_type, min_value=0, max_value=10)]
+    values, errors = convert_and_validate(fields, {"n": text})
+    assert errors == ["forms.not_number"]

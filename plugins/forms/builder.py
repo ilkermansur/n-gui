@@ -111,7 +111,13 @@ class FileFieldState:
         os.makedirs(UPLOAD_FOLDER, exist_ok=True)
         file_name = uuid.uuid4().hex + "_" + sanitize_file_name(event.file.name)
         target_path = os.path.join(UPLOAD_FOLDER, file_name)
-        await event.file.save(target_path)
+        # Neden önce temizlenir: kayıt başarısızsa eski yol sessizce kalmasın.
+        self.saved_path = ""
+        try:
+            await event.file.save(target_path)
+        except OSError as error:
+            ui.notify(str(error), type="negative")
+            return
         self.saved_path = target_path
 
 

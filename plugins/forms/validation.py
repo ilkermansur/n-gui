@@ -6,6 +6,8 @@ ve (çeviri anahtarından üretilmiş) hata mesajlarını döndürür. Çeviri i
 app.core.text.t kullanılır; "i18n" servisi varsa etiket de dile göre seçilir.
 """
 
+import math
+
 from app.core import kernel as kernel_module
 from app.core.field_spec import FieldSpec
 from app.core.text import t
@@ -105,6 +107,9 @@ def convert_int(field: FieldSpec, value: object) -> int:
         as_float = float(value)
     except (TypeError, ValueError):
         raise FieldError("forms.not_number")
+    # Neden önce kontrol: nan/inf için int() hata fırlatır.
+    if math.isnan(as_float) or math.isinf(as_float):
+        raise FieldError("forms.not_number")
     if as_float != int(as_float):
         raise FieldError("forms.not_number")
     number = int(as_float)
@@ -123,6 +128,9 @@ def convert_float(field: FieldSpec, value: object) -> float:
     try:
         number = float(value)
     except (TypeError, ValueError):
+        raise FieldError("forms.not_number")
+    # Neden reddedilir: nan karşılaştırmalarda hep False verir, sınırlardan geçer.
+    if math.isnan(number) or math.isinf(number):
         raise FieldError("forms.not_number")
     check_bounds(field, number)
     return number
