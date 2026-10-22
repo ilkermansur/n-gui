@@ -1,0 +1,299 @@
+"""service.py - "auth" servisi: giriş, yetki, oturum, kullanıcı ve rol yönetimi.
+
+Kim kullanır: plugin.py (kaydeder), çekirdek (access.py, layout.py) ve diğer
+eklentiler kernel.get_service("auth") ile.
+Nasıl bağlanır: veritabanına get_session() ile erişir, oturum bilgisini
+NiceGUI'nin app.storage.user["user_id"] alanında tutar, giriş/çıkış olaylarını
+kernel.events ile yayınlar. Kullanıcı bilgisi her yerde şu anahtarlı sözlüktür:
+id, username, full_name, roles (list[str]), permissions (list[str]).
+"""
+
+import logging
+
+from nicegui import app
+from sqlalchemy import select
+
+from app.core.db import get_session
+from plugins.auth.models import Role, User, UserRole
+from plugins.auth.passwords import hash_password, verify_password
+
+logger = logging.getLogger(__name__)
+
+# Seed rolleri ve izinleri (rol adı -> izin listesi).
+DEFAULT_ROLES = {
+    "admin": ["*"],
+    "operator": [
+        "section.dashboard.view",
+        "section.operation.view",
+        "section.report.view",
+        "log.view",
+    ],
+    "viewer": ["section.dashboard.view", "section.report.view"],
+}
+
+
+def normalize_username(username: str) -> str:
+    """Kullanıcı adını küçük harfe çevirip baş/son boşluğu atar."""
+    return username.lower().strip()
+
+
+def split_permissions(permissions_text: str) -> list[str]:
+    """Virgülle ayrılmış izin metnini listeye çevirir (boş parçalar atılır)."""
+    permissions = []
+    for part in permissions_text.split(","):
+        part = part.strip()
+        if part:
+            permissions.append(part)
+    return permissions
+
+
+class AuthService:
+    """Kullanıcı, rol ve oturum işlerinin tek sahibi."""
+
+    def __init__(self, kernel) -> None:
+        """Servisi kurar. Parametre: kernel - olay yayını için. Dönüş: yok."""
+        self.kernel = kernel
+
+    # ---------- Yardımcılar ----------
+
+    def build_user_dict(self, session, user: User) -> dict:
+        """Bir User kaydını rolleri ve birleşik izinleriyle sözlüğe çevirir.
+
+        Parametreler: session - açık DB oturumu; user - User kaydı.
+        Dönüş: id, username, full_name, roles, permissions anahtarlı sözlük.
+        """
+        query = (
+            select(Role)
+            .join(UserRole, UserRole.role_id == Role.id)
+            .where(UserRole.user_id == user.id)
+            .order_by(Role.name)
+        )
+        role_names: list[str] = []
+        permissions: list[str] = []
+        for role in session.scalars(query):
+            role_names.append(role.name)
+            for permission in split_permissions(role.permissions_text):
+                # Neden kontrol: birden çok rolde aynı izin varsa tek kez yazılsın.
+                if permission not in permissions:
+                    permissions.append(permission)
+        return {
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name,
+            "roles": role_names,
+            "permissions": permissions,
+        }
+
+    def set_user_roles(self, session, user_id: int, role_names: list[str]) -> None:
+        """Kullanıcının rollerini verilen listeyle değiştirir (commit etmez).
+
+        Parametreler: session; user_id; role_names. Bilinmeyen rol adı ValueError verir.
+        """
+        roles = []
+        for role_name in role_names:
+            role = session.scalar(select(Role).where(Role.name == role_name))
+            if role is None:
+                raise ValueError(f"Rol bulunamadı: {role_name}")
+            roles.append(role)
+
+        old_links = session.scalars(select(UserRole).where(UserRole.user_id == user_id))
+        for link in old_links.all():
+            session.delete(link)
+        for role in roles:
+            session.add(UserRole(user_id=user_id, role_id=role.id))
+
+    # ---------- Giriş ----------
+
+    def authenticate(self, username: str, password: str) -> dict | None:
+        """Kullanıcı adı ve parolayı doğrular.
+
+        Parametreler: username (büyük/küçük harf fark etmez); password.
+        Dönüş: kullanıcı sözlüğü; yanlış bilgi ya da pasif kullanıcıda None.
+        """
+        with get_session() as session:
+            user = session.scalar(
+                select(User).where(User.username == normalize_username(username))
+            )
+            if user is None or not user.is_active:
+                return None
+            if not verify_password(password, user.password_hash):
+                return None
+            return self.build_user_dict(session, user)
+
+    def get_user_by_id(self, user_id: int) -> dict | None:
+        """Kullanıcıyı id ile okur. Dönüş: sözlük; yoksa ya da pasifse None."""
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if user is None or not user.is_active:
+                return None
+            return self.build_user_dict(session, user)
+
+    # ---------- Yetki ----------
+
+    def has_permission(self, user: dict | None, permission: str) -> bool:
+        """Kullanıcının izni olup olmadığını söyler.
+
+        Parametreler: user - kullanıcı sözlüğü ya da None; permission - izin anahtarı.
+        Dönüş: "*" izni her şeyi kapsar; kullanıcı None ise False.
+        """
+        if user is None:
+            return False
+        if "*" in user["permissions"]:
+            return True
+        return permission in user["permissions"]
+
+    # ---------- Oturum ----------
+
+    def login_user(self, user: dict) -> None:
+        """Kullanıcıyı bu tarayıcı oturumuna giriş yapmış olarak yazar.
+
+        Parametre: user - kullanıcı sözlüğü. Dönüş: yok. İstek bağlamı gerektirir.
+        """
+        app.storage.user["user_id"] = user["id"]
+
+    def logout_current_user(self) -> None:
+        """Oturumdaki kullanıcıyı çıkarır ve auth.logout olayını yayınlar."""
+        user = self.current_user()
+        app.storage.user.pop("user_id", None)
+        if user is not None:
+            self.kernel.events.publish("auth.logout", {"username": user["username"]})
+
+    def current_user(self) -> dict | None:
+        """Oturumdaki kullanıcıyı her çağrıda DB'den okur.
+
+        Dönüş: kullanıcı sözlüğü; giriş yoksa, kullanıcı silinmiş/pasifse ya da
+        istek bağlamı dışındaysa None.
+        """
+        # Neden RuntimeError yakalanır: app.storage.user yalnızca bir web isteği
+        # içinde vardır; arka plan kodundan çağrılınca hata yerine None dönmeli.
+        try:
+            user_id = app.storage.user.get("user_id")
+        except RuntimeError:
+            return None
+        if user_id is None:
+            return None
+        return self.get_user_by_id(user_id)
+
+    # ---------- Kullanıcı yönetimi ----------
+
+    def list_users(self) -> list[dict]:
+        """Tüm kullanıcıları (pasifler dahil) listeler.
+
+        Dönüş: sözlük listesi; her sözlükte ayrıca is_active bulunur.
+        """
+        users = []
+        with get_session() as session:
+            for user in session.scalars(select(User).order_by(User.username)):
+                user_dict = self.build_user_dict(session, user)
+                user_dict["is_active"] = user.is_active
+                users.append(user_dict)
+        return users
+
+    def create_user(
+        self, username: str, full_name: str, password: str, role_names: list[str]
+    ) -> dict:
+        """Yeni kullanıcı oluşturur.
+
+        Parametreler: username, full_name, password (düz), role_names.
+        Dönüş: kullanıcı sözlüğü. Kullanıcı adı doluysa ya da boşsa ValueError.
+        """
+        username = normalize_username(username)
+        if not username:
+            raise ValueError("Kullanıcı adı boş olamaz")
+        with get_session() as session:
+            existing = session.scalar(select(User).where(User.username == username))
+            if existing is not None:
+                raise ValueError(f"Bu kullanıcı adı zaten var: {username}")
+            user = User(
+                username=username,
+                full_name=full_name,
+                password_hash=hash_password(password),
+            )
+            session.add(user)
+            # Neden flush: rol bağlarını yazmadan önce user.id'nin oluşması gerekir.
+            session.flush()
+            self.set_user_roles(session, user.id, role_names)
+            session.commit()
+            return self.build_user_dict(session, user)
+
+    def update_user(
+        self, user_id: int, full_name: str, is_active: bool, role_names: list[str]
+    ) -> None:
+        """Kullanıcının adını, aktiflik durumunu ve rollerini günceller.
+
+        Parametreler: user_id, full_name, is_active, role_names. Dönüş: yok.
+        Kullanıcı yoksa ValueError.
+        """
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if user is None:
+                raise ValueError(f"Kullanıcı bulunamadı: {user_id}")
+            user.full_name = full_name
+            user.is_active = is_active
+            self.set_user_roles(session, user_id, role_names)
+            session.commit()
+
+    def change_password(self, user_id: int, new_password: str) -> None:
+        """Kullanıcının parolasını değiştirir. Kullanıcı yoksa ValueError."""
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if user is None:
+                raise ValueError(f"Kullanıcı bulunamadı: {user_id}")
+            user.password_hash = hash_password(new_password)
+            session.commit()
+
+    # ---------- Rol yönetimi ----------
+
+    def list_roles(self) -> list[dict]:
+        """Rolleri listeler. Dönüş: {"name": ..., "permissions": [...]} sözlükleri."""
+        roles = []
+        with get_session() as session:
+            for role in session.scalars(select(Role).order_by(Role.name)):
+                roles.append(
+                    {
+                        "name": role.name,
+                        "permissions": split_permissions(role.permissions_text),
+                    }
+                )
+        return roles
+
+    def create_role(self, name: str) -> None:
+        """Boş izinli yeni rol oluşturur. Ad doluysa ya da boşsa ValueError."""
+        name = name.strip()
+        if not name:
+            raise ValueError("Rol adı boş olamaz")
+        with get_session() as session:
+            if session.scalar(select(Role).where(Role.name == name)) is not None:
+                raise ValueError(f"Bu rol zaten var: {name}")
+            session.add(Role(name=name, permissions_text=""))
+            session.commit()
+
+    def set_role_permissions(self, role_name: str, permissions: list[str]) -> None:
+        """Rolün izin listesini değiştirir. Rol yoksa ValueError."""
+        with get_session() as session:
+            role = session.scalar(select(Role).where(Role.name == role_name))
+            if role is None:
+                raise ValueError(f"Rol bulunamadı: {role_name}")
+            role.permissions_text = ",".join(permissions)
+            session.commit()
+
+    # ---------- Seed ----------
+
+    def seed_defaults(self, initial_admin_password: str) -> None:
+        """Hazır rolleri ve admin kullanıcısını oluşturur.
+
+        Parametre: initial_admin_password - admin'in ilk parolası. Dönüş: yok.
+        Neden tekrar güvenli: zaten var olan rol ve admin kullanıcısına dokunulmaz.
+        """
+        with get_session() as session:
+            for role_name, permissions in DEFAULT_ROLES.items():
+                role = session.scalar(select(Role).where(Role.name == role_name))
+                if role is None:
+                    session.add(Role(name=role_name, permissions_text=",".join(permissions)))
+            session.commit()
+
+        with get_session() as session:
+            admin = session.scalar(select(User).where(User.username == "admin"))
+        if admin is None:
+            self.create_user("admin", "Yönetici", initial_admin_password, ["admin"])
+            logger.info("Varsayılan admin kullanıcısı oluşturuldu")

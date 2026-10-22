@@ -1,0 +1,10 @@
+{
+  "auth.login.title": "Giriş Yap",
+  "auth.login.subtitle": "Devam etmek için hesabınızla giriş yapın.",
+  "auth.login.username": "Kullanıcı adı",
+  "auth.login.password": "Şifre",
+  "auth.login.button": "Giriş",
+  "auth.login.failed": "Kullanıcı adı veya şifre hatalı.",
+  "auth.permission.users_manage": "Kullanıcıları yönet",
+  "auth.permission.roles_manage": "Rolleri yönet"
+}

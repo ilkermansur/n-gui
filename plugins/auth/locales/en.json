@@ -1,0 +1,10 @@
+{
+  "auth.login.title": "Sign in",
+  "auth.login.subtitle": "Sign in with your account to continue.",
+  "auth.login.username": "Username",
+  "auth.login.password": "Password",
+  "auth.login.button": "Sign in",
+  "auth.login.failed": "Wrong username or password.",
+  "auth.permission.users_manage": "Manage users",
+  "auth.permission.roles_manage": "Manage roles"
+}
