@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "n-gui"
+version = "0.1.0"
+description = "Moduler NiceGUI kabuk uygulamasi"
+requires-python = ">=3.12"
+dependencies = [
+    "nicegui>=3.18",
+    "sqlalchemy>=2.1",
+    "pyyaml",
+    "bcrypt",
+    "apscheduler>=3.11,<4",
+    "tomli-w",
+    "pytest",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*", "plugins*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -1,0 +1,27 @@
+# N-GUI ayar dosyasi. Uygulama acilirken app/core/config.py tarafindan okunur.
+
+[app]
+# Tarayici sekmesinde ve ust cubukta gorunen uygulama adi
+title = "N-GUI"
+# Web sunucusunun dinledigi port
+port = 8080
+# Oturum bilgisini imzalamak icin kullanilan gizli anahtar (canlida mutlaka degistirin)
+storage_secret = "degistir-beni"
+# Varsayilan arayuz dili (tr veya en)
+default_language = "tr"
+
+[database]
+# SQLAlchemy baglanti adresi
+url = "sqlite:///data/app.db"
+
+[plugins]
+# Yuklenmeyecek eklentilerin klasor adlari
+disabled = []
+
+[scripts]
+# Script tanim dosyalarinin bulundugu klasor
+folder = "scripts"
+
+[auth]
+# Ilk acilista olusturulan admin kullanicisinin parolasi (ilk giristen sonra degistirin)
+initial_admin_password = "admin"
