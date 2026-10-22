@@ -1,10 +1,10 @@
-"""test_events.py - app/core/events.py icin testler."""
+"""test_events.py - app/core/events.py için testler."""
 
 from app.core.events import EventBus
 
 
 def test_publish_calls_handlers_in_order():
-    """Handler'lar abone olma sirasiyla cagrilmali."""
+    """Handler'lar abone olma sırasıyla çağrılmalı."""
     bus = EventBus()
     calls = []
 
@@ -21,7 +21,7 @@ def test_publish_calls_handlers_in_order():
 
 
 def test_failing_handler_does_not_stop_others():
-    """Ilk handler hata verse de ikincisi cagrilmali, publish hata atmamali."""
+    """İlk handler hata verse de ikincisi çağrılmalı, publish hata atmamalı."""
     bus = EventBus()
     calls = []
 

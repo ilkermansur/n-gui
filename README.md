@@ -1,6 +1,6 @@
 # N-GUI
 
-Moduler NiceGUI web kabugu: kucuk bir cekirdek (`app/core`) ve eklenti klasorleri (`plugins/<ad>/`).
+Modüler NiceGUI web kabuğu: küçük bir çekirdek (`app/core`) ve eklenti klasörleri (`plugins/<ad>/`).
 
 ## Kurulum
 
@@ -9,10 +9,10 @@ python3 -m venv .venv
 .venv/bin/pip install -e .
 ```
 
-## Calistirma
+## Çalıştırma
 
-Ayarlar `config.toml` dosyasindadir (baslik, port, veritabani, devre disi eklentiler).
-Uygulama giris noktasi sonraki gorevlerde eklenecektir.
+Ayarlar `config.toml` dosyasındadır (başlık, port, veritabanı, devre dışı eklentiler).
+Uygulama giriş noktası sonraki görevlerde eklenecektir.
 
 ## Test
 

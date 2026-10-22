@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "n-gui"
 version = "0.1.0"
-description = "Moduler NiceGUI kabuk uygulamasi"
+description = "Modüler NiceGUI kabuk uygulamasi"
 requires-python = ">=3.12"
 dependencies = [
     "nicegui>=3.18",

@@ -1,16 +1,16 @@
-"""test_config.py - app/core/config.py icin testler."""
+"""test_config.py - app/core/config.py için testler."""
 
 from app.core.config import AppConfig, load_config, save_config_value
 
 
 def test_missing_file_returns_defaults(tmp_path):
-    """Olmayan dosya verilince varsayilan AppConfig donmeli."""
+    """Olmayan dosya verilince varsayılan AppConfig dönmeli."""
     result = load_config(str(tmp_path / "yok.toml"))
     assert result == AppConfig()
 
 
 def test_reads_values(tmp_path):
-    """Dosyadaki degerler AppConfig alanlarina dogru yazilmali."""
+    """Dosyadaki değerler AppConfig alanlarına doğru yazılmalı."""
     path = tmp_path / "config.toml"
     path.write_text(
         '[app]\ntitle = "X"\n'
@@ -25,8 +25,28 @@ def test_reads_values(tmp_path):
 
 
 def test_save_config_value_roundtrip(tmp_path):
-    """Yazilan database.url tekrar okununca ayni olmali."""
+    """Yazılan database.url tekrar okununca aynı olmalı."""
     path = tmp_path / "config.toml"
     save_config_value(str(path), "database", "url", "sqlite:///yeni.db")
     result = load_config(str(path))
     assert result.database_url == "sqlite:///yeni.db"
+
+
+def test_save_config_value_keeps_comments(tmp_path):
+    """Kaydederken yorumlar ve diğer değerler korunmalı; eksik anahtar/bölüm eklenmeli."""
+    path = tmp_path / "config.toml"
+    path.write_text(
+        "# üst yorum\n[app]\n# başlık yorumu\ntitle = \"X\"\n\n[database]\nurl = \"a\"\n",
+        encoding="utf-8",
+    )
+    save_config_value(str(path), "database", "url", "b")
+    save_config_value(str(path), "app", "port", 9000)
+    save_config_value(str(path), "plugins", "disabled", ["x"])
+    text = path.read_text(encoding="utf-8")
+    assert "# üst yorum" in text
+    assert "# başlık yorumu" in text
+    result = load_config(str(path))
+    assert result.app_title == "X"
+    assert result.database_url == "b"
+    assert result.port == 9000
+    assert result.disabled_plugins == ["x"]

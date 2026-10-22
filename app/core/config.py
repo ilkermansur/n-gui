@@ -1,8 +1,8 @@
-"""config.py - config.toml dosyasini okuyup yazar.
+"""config.py - config.toml dosyasını okuyup yazar.
 
-Kim kullanir: uygulama baslangici (main) ve ayarlar sayfasi.
-Nasil baglanir: load_config() bir AppConfig dondurur; kernel bu nesneyi
-diger modullere dagitir. save_config_value() tek bir degeri dosyaya yazar.
+Kim kullanır: uygulama başlangıcı (main) ve ayarlar sayfası.
+Nasıl bağlanır: load_config() bir AppConfig döndürür; kernel bu nesneyi
+diğer modüllere dağıtır. save_config_value() tek bir değeri dosyaya yazar.
 """
 
 import tomllib
@@ -14,7 +14,7 @@ import tomli_w
 
 @dataclass
 class AppConfig:
-    """Uygulamanin tum ayarlarini tutan veri sinifi (varsayilanlarla birlikte)."""
+    """Uygulamanın tüm ayarlarını tutan veri sınıfı (varsayılanlarla birlikte)."""
 
     app_title: str = "N-GUI"
     database_url: str = "sqlite:///data/app.db"
@@ -27,14 +27,14 @@ class AppConfig:
 
 
 def load_config(path: str) -> AppConfig:
-    """config.toml dosyasini okuyup AppConfig dondurur.
+    """config.toml dosyasını okuyup AppConfig döndürür.
 
-    Parametre: path - toml dosyasinin yolu.
-    Donus: AppConfig; dosya yoksa ya da bir deger eksikse varsayilanlar kullanilir.
+    Parametre: path - toml dosyasının yolu.
+    Dönüş: AppConfig; dosya yoksa ya da bir değer eksikse varsayılanlar kullanılır.
     """
     config = AppConfig()
 
-    # Neden: dosya yoksa uygulama yine de varsayilanlarla acilabilmeli.
+    # Neden: dosya yoksa uygulama yine de varsayılanlarla açılabilmeli.
     if not Path(path).exists():
         return config
 
@@ -61,22 +61,47 @@ def load_config(path: str) -> AppConfig:
 
 
 def save_config_value(path: str, section: str, key: str, value) -> None:
-    """config.toml icindeki tek bir degeri degistirip dosyayi geri yazar.
+    """config.toml içindeki tek bir değeri yerinde değiştirir; yorumlar korunur.
 
-    Parametreler: path - toml yolu; section - bolum adi (ornek "database");
-    key - anahtar adi (ornek "url"); value - yazilacak yeni deger.
-    Donus: yok.
+    Parametreler: path - toml yolu; section - bölüm adı (örnek "database");
+    key - anahtar adı (örnek "url"); value - yazılacak yeni değer.
+    Dönüş: yok.
     """
-    data = {}
+    lines = []
     if Path(path).exists():
-        with open(path, "rb") as file:
-            data = tomllib.load(file)
+        with open(path, encoding="utf-8") as file:
+            lines = file.read().splitlines()
 
-    # Neden: bolum henuz yoksa once bos bir bolum olusturmaliyiz.
-    if section not in data:
-        data[section] = {}
-    data[section][key] = value
+    # Neden: değeri toml kurallarına uygun yazmak için (tırnak, liste vb.) tomli_w kullanılır.
+    new_line = tomli_w.dumps({key: value}).strip()
+    section_header = "[" + section + "]"
 
-    # Not: tomli_w yorum satirlarini korumaz; yazim sirasinda yorumlar kaybolur.
-    with open(path, "wb") as file:
-        tomli_w.dump(data, file)
+    inside_section = False
+    section_header_index = -1
+    replaced = False
+    result = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("["):
+            inside_section = stripped == section_header
+            if inside_section:
+                section_header_index = len(result)
+        elif inside_section and not replaced and "=" in stripped:
+            if stripped.split("=")[0].strip() == key:
+                line = new_line
+                replaced = True
+        result.append(line)
+
+    if not replaced:
+        if section_header_index >= 0:
+            # Neden: anahtar yoksa bölüm başlığının hemen altına eklenir.
+            result.insert(section_header_index + 1, new_line)
+        else:
+            # Neden: bölüm hiç yoksa dosyanın sonuna yeni bölüm açılır.
+            if len(result) > 0 and result[-1].strip() != "":
+                result.append("")
+            result.append(section_header)
+            result.append(new_line)
+
+    with open(path, "w", encoding="utf-8") as file:
+        file.write("\n".join(result) + "\n")

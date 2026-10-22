@@ -1,8 +1,8 @@
-"""events.py - eklentilerin birbirini tanimadan haberlesmesi icin olay yolu.
+"""events.py - eklentilerin birbirini tanımadan haberleşmesi için olay yolu.
 
-Kim kullanir: kernel ve eklentiler (subscribe / publish).
-Nasil baglanir: kernel tek bir EventBus olusturur; eklentiler olay adina
-abone olur, baska bir yer ayni adla publish yapinca handler'lar cagrilir.
+Kim kullanır: kernel ve eklentiler (subscribe / publish).
+Nasıl bağlanır: kernel tek bir EventBus oluşturur; eklentiler olay adına
+abone olur, başka bir yer aynı adla publish yapınca handler'lar çağrılır.
 """
 
 import logging
@@ -11,31 +11,31 @@ logger = logging.getLogger(__name__)
 
 
 class EventBus:
-    """Olay adina gore handler listesi tutan basit yayin-abone sinifi."""
+    """Olay adına göre handler listesi tutan basit yayın-abone sınıfı."""
 
     def __init__(self) -> None:
-        """Bos bir handler sozlugu olusturur. Parametre ve donus yok."""
+        """Boş bir handler sözlüğü oluşturur. Parametre ve dönüş yok."""
         self.handlers: dict[str, list] = {}
 
     def subscribe(self, event_name: str, handler) -> None:
         """Bir olaya handler ekler.
 
-        Parametreler: event_name - olay adi; handler - data sozlugu alan fonksiyon.
-        Donus: yok.
+        Parametreler: event_name - olay adı; handler - data sözlüğü alan fonksiyon.
+        Dönüş: yok.
         """
         if event_name not in self.handlers:
             self.handlers[event_name] = []
         self.handlers[event_name].append(handler)
 
     def publish(self, event_name: str, data: dict) -> None:
-        """Olaya abone tum handler'lari abone olma sirasiyla cagirir.
+        """Olaya abone tüm handler'ları abone olma sırasıyla çağırır.
 
-        Parametreler: event_name - olay adi; data - handler'lara verilen sozluk.
-        Donus: yok. Bir handler hata verirse loglanir, digerleri calismaya devam eder.
+        Parametreler: event_name - olay adı; data - handler'lara verilen sözlük.
+        Dönüş: yok. Bir handler hata verirse loglanır, diğerleri çalışmaya devam eder.
         """
         for handler in self.handlers.get(event_name, []):
-            # Neden: tek bir bozuk handler butun olay zincirini durdurmamali.
+            # Neden: tek bir bozuk handler bütün olay zincirini durdurmamalı.
             try:
                 handler(data)
             except Exception:
-                logger.exception("Olay handler'i hata verdi: %s", event_name)
+                logger.exception("Olay handler'ı hata verdi: %s", event_name)
